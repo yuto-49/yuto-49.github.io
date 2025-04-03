@@ -40,4 +40,35 @@ body {
   .dark-mode a {
     color: #66ccff;
   }
-    
+  .navbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    background: #fff;
+    border-bottom-left-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+  }
+  
+  .navbar ul {
+    list-style: none;
+    margin: 0;
+    padding: 0.5em 1em;
+    display: flex;
+    gap: 1em;
+  }
+  
+  .navbar li {
+    display: inline;
+  }
+  
+  .navbar a {
+    text-decoration: none;
+    color: #007acc;
+    font-weight: bold;
+  }
+  
+  .navbar a:hover {
+    text-decoration: underline;
+  }
+      
