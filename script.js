@@ -2,7 +2,7 @@
 const toggle = document.createElement("button");
 toggle.innerText = "🌙 Dark Mode";
 toggle.style.position = "fixed";
-toggle.style.top = "1rem";
+toggle.style.bottom = "1rem";
 toggle.style.right = "1rem";
 toggle.style.zIndex = "1000";
 document.body.appendChild(toggle);
@@ -24,3 +24,17 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     }
   });
 });
+
+document.querySelectorAll(".accordion-toggle").forEach(toggle => {
+    toggle.addEventListener("click", () => {
+      const content = toggle.nextElementSibling;
+      content.classList.toggle("open");
+  
+      // Change arrow direction
+      if (toggle.textContent.includes("⬇")) {
+        toggle.textContent = toggle.textContent.replace("⬇", "⬆");
+      } else {
+        toggle.textContent = toggle.textContent.replace("⬆", "⬇");
+      }
+    });
+  });
