@@ -2,64 +2,235 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yuto Maruyama | Portfolio</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
-    <div class="top-photo">
-        <img src="assets/20240120125527_IMG_3184.png" alt="Yuto Maruyama" />
-    </div>
+  <!-- Custom Cursor -->
+  <div class="cursor"></div>
+  <div class="cursor-follower"></div>
 
-  <header>
-    <h1>Yuto Maruyama</h1>
-    <p>Computer Science Student | Aspiring Data Scientist & App Developer</p>
-  </header>
-
+  <!-- Navigation -->
   <nav class="navbar">
-    <ul>
-      <li><a href="#about">About</a></li>
-      <li><a href="#projects">Projects</a></li>
-      <li><a href="#skills">Skills</a></li>
-      <li><a href="#contact">Contact</a></li>
-      <li><a href="resume.html">Resume</a></li> <!-- this will go to resume.html -->
-    </ul>
+    <div class="nav-container">
+      <div class="nav-logo">
+        <a href="#home">YM</a>
+      </div>
+      <div class="nav-links">
+        <a href="#about" class="nav-link">About</a>
+        <a href="#projects" class="nav-link">Projects</a>
+        <a href="#contact" class="nav-link">Contact</a>
+        <a href="resume.html" class="nav-link">Resume</a>
+      </div>
+    </div>
   </nav>
 
-  <section id="about">
-    <h2>About Me</h2>
-    <p>I am a 3rd-year CS student at IIT passionate about using data and technology to solve social issues. I have experience in app development, digital art, and leadership.</p>
-  </section>
-
-  <section class="accordion-section">
-    <h2 class="accordion-toggle">Projects ⬇</h2>
-    <div class="accordion-content">
-    <ul>
-      <li><strong>Weather Forecast App</strong> – SQL-powered app providing real-time weather updates and social sharing features.</li>
-      <li><strong>Biomass-Powered Dustbin</strong> – Prototype system using trash to generate electricity for sustainable energy solutions.</li>
-    </ul>
+  <!-- Hero Section -->
+  <section id="home" class="hero-section">
+    <div class="hero-content">
+      <div class="hero-text">
+        <h1 class="hero-title">
+          <span class="line">Yuto</span>
+          <span class="line">Maruyama</span>
+        </h1>
+        <p class="hero-subtitle">Computer Science Student</p>
+        <p class="hero-description">Aspiring Data Scientist & App Developer</p>
+      </div>
+      <div class="hero-image">
+        <div class="image-wrapper">
+          <img src="assets/20240120125527_IMG_3184.png" alt="Yuto Maruyama" />
+        </div>
+      </div>
+    </div>
+    <div class="scroll-hint">
+      <span>Scroll</span>
+      <div class="scroll-line"></div>
     </div>
   </section>
 
-  <section class="accordion-section">
-    <h2 class="accordion-toggle">Skills ⬇</h2>
-    <div class="accordion-content">
-    <p>Languages: Python, Ruby, OCaml, SQL, HTML/CSS/JS</p>
-    <p>Tools: Git, Adobe, Excel, LLM integration, Raspberry Pi</p>
+  <!-- About Section -->
+  <section id="about" class="section about-section">
+    <div class="section-content">
+      <div class="section-number">01</div>
+      <h2 class="section-title">About</h2>
+      <div class="about-content">
+        <p class="about-text">
+          I'm a 3rd-year CS student at IIT. Passionate about app development, 
+          sustainability, and data-driven solutions that create a better world.
+        </p>
+        <div class="about-stats">
+          <div class="stat-item">
+            <div class="stat-number">3+</div>
+            <div class="stat-label">Years Experience</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">5+</div>
+            <div class="stat-label">Projects</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">10+</div>
+            <div class="stat-label">Technologies</div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section id="contact">
-    <h2>Contact</h2>
-    <p>Email: <a href="mailto:yuto@example.com">ymaruyama1@hawk.iit.edu</a></p>
-    <p><a href="https://github.com/yuto-49">GitHub</a> | <a href="https://www.linkedin.com/in/yuto-maruyama-585529251/">LinkedIn</a></p>
+  <!-- Projects Section -->
+  <section id="projects" class="section projects-section">
+    <div class="section-header">
+      <div class="section-number">02</div>
+      <h2 class="section-title">Projects</h2>
+    </div>
+
+    <!-- Project 1 -->
+    <div class="project-item" data-project="1">
+      <div class="project-content">
+        <div class="project-info">
+          <div class="project-number">01</div>
+          <h3 class="project-title">Weather Forecast App</h3>
+          <p class="project-description">
+            SQL-powered app providing real-time weather updates and social sharing features. 
+            Built with modern web technologies and API integration.
+          </p>
+          <div class="project-tech">
+            <span class="tech">SQL</span>
+            <span class="tech">JavaScript</span>
+            <span class="tech">API</span>
+          </div>
+          <a href="#" class="project-link">
+            <span>View Project</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+        </div>
+        <div class="project-visual">
+          <div class="project-image-wrapper">
+            <div class="project-image project-image-1">
+              <div class="image-content weather-theme">
+                <div class="weather-icon">🌤️</div>
+                <div class="weather-details">
+                  <div class="temp">72°F</div>
+                  <div class="location">Chicago, IL</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Project 2 -->
+    <div class="project-item" data-project="2">
+      <div class="project-content reverse">
+        <div class="project-visual">
+          <div class="project-image-wrapper">
+            <div class="project-image project-image-2">
+              <div class="image-content biomass-theme">
+                <div class="biomass-icon">⚡</div>
+                <div class="biomass-details">
+                  <div class="energy">2.4 kW</div>
+                  <div class="status">Active</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="project-info">
+          <div class="project-number">02</div>
+          <h3 class="project-title">Biomass-Powered Dustbin</h3>
+          <p class="project-description">
+            Innovative prototype using trash to generate electricity, combining sustainability 
+            with practical engineering solutions. Built with Raspberry Pi and IoT sensors.
+          </p>
+          <div class="project-tech">
+            <span class="tech">Raspberry Pi</span>
+            <span class="tech">Hardware</span>
+            <span class="tech">IoT</span>
+          </div>
+          <a href="#" class="project-link">
+            <span>View Project</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <footer>
-    <p>&copy; 2025 Yuto Maruyama</p>
+  <!-- Skills Section -->
+  <section id="skills" class="section skills-section">
+    <div class="section-content">
+      <div class="section-number">03</div>
+      <h2 class="section-title">Skills</h2>
+      <div class="skills-container">
+        <div class="skills-column">
+          <h3 class="skills-category">Languages</h3>
+          <div class="skills-list">
+            <div class="skill-tag">Python</div>
+            <div class="skill-tag">Ruby</div>
+            <div class="skill-tag">OCaml</div>
+            <div class="skill-tag">SQL</div>
+            <div class="skill-tag">JavaScript</div>
+            <div class="skill-tag">HTML/CSS</div>
+          </div>
+        </div>
+        <div class="skills-column">
+          <h3 class="skills-category">Tools & Technologies</h3>
+          <div class="skills-list">
+            <div class="skill-tag">Git</div>
+            <div class="skill-tag">Adobe Suite</div>
+            <div class="skill-tag">Excel</div>
+            <div class="skill-tag">Raspberry Pi</div>
+            <div class="skill-tag">Node.js</div>
+            <div class="skill-tag">React</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="section contact-section">
+    <div class="section-content">
+      <div class="section-number">04</div>
+      <h2 class="section-title">Get in Touch</h2>
+      <p class="contact-text">
+        Let's connect and discuss opportunities in data science and app development.
+      </p>
+      <div class="contact-links">
+        <a href="yutomaruyama2003@gmail.com" class="contact-item">
+          <div class="contact-icon">✉️</div>
+          <div class="contact-label">Email</div>
+          <div class="contact-value">yuto@example.com</div>
+        </a>
+        <a href="https://github.com/yuto-49" target="_blank" rel="noopener noreferrer" class="contact-item">
+          <div class="contact-icon">💻</div>
+          <div class="contact-label">GitHub</div>
+          <div class="contact-value">yuto-49</div>
+        </a>
+        <a href="https://www.linkedin.com/in/yuto-maruyama-585529251/" target="_blank" rel="noopener noreferrer" class="contact-item">
+          <div class="contact-icon">🔗</div>
+          <div class="contact-label">LinkedIn</div>
+          <div class="contact-value">Connect</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <p>&copy; 2025 Yuto Maruyama. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="#home">Back to Top</a>
+      </div>
+    </div>
   </footer>
 
-  <script src="script.js"></script>
-
+  <script src="script.js?v=2"></script>
 </body>
 </html>
