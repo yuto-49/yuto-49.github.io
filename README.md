@@ -4,7 +4,7 @@ Personal portfolio website showcasing my projects and experience.
 
 ## Live Website
 
-Visit the live website at: **[https://yuto-49.github.io/](https://yuto-49.github.io/)**
+Visit the live website at: **[https://yuto-49.github.io/yuto-portfolio/](https://yuto-49.github.io/yuto-portfolio/)**
 
 ## Technologies Used
 
