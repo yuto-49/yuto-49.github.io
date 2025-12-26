@@ -17,3 +17,9 @@ ENV/
 
 # OS
 .DS_Store
+
+# Backend data
+backend/data/uploads/
+backend/data/chromadb/
+*.db
+*.sqlite
