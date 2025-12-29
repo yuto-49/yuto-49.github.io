@@ -288,6 +288,18 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root():
+    """Health check endpoint"""
+    return {"status": "ok", "message": "Yuto Portfolio AI Backend is running"}
+
+
+@app.get("/health")
+def health():
+    """Health check endpoint for Render"""
+    return {"status": "healthy"}
+
+
 @app.post("/api/agent", response_model=SummaryResponse | ChatResponse)
 def agent_endpoint(payload: AgentRequest):
     if not ANTHROPIC_API_KEY:
