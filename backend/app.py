@@ -10,23 +10,25 @@ from dotenv import load_dotenv
 
 from crewai import Agent, Task, Crew
 
-# Import RAG systems
+# Load environment variables from .env file first
+load_dotenv()
+
+# Import RAG systems (can be disabled via environment variable for memory-constrained deployments)
+RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
+
 try:
     from rag_system import CareerRAG
-    RAG_ENABLED = True
+    RAG_ENABLED = not RAG_DISABLED
 except ImportError:
     print("[backend] Warning: RAG system not available. Install dependencies: pip install chromadb sentence-transformers")
     RAG_ENABLED = False
 
 try:
     from pdf_rag import DualSourceRAG
-    PDF_RAG_ENABLED = True
+    PDF_RAG_ENABLED = not RAG_DISABLED
 except ImportError:
     print("[backend] Warning: PDF RAG system not available. Install dependencies: pip install pypdf")
     PDF_RAG_ENABLED = False
-
-# Load environment variables from .env file
-load_dotenv()
 
 # ============================================
 # Environment & LLM setup
@@ -46,30 +48,48 @@ os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY or ""
 LLM_MODEL = "anthropic/claude-3-haiku-20240307"
 
 # ============================================
-# RAG System Initialization
+# RAG System Initialization (Lazy Loading)
 # ============================================
 
-# Initialize RAG system if available
-rag_system = None
-if RAG_ENABLED:
-    try:
-        print("[backend] Initializing RAG system...")
-        rag_system = CareerRAG()
-        print("[backend] RAG system ready!")
-    except Exception as e:
-        print(f"[backend] Warning: Could not initialize RAG system: {e}")
-        rag_system = None
+# Lazy-loaded RAG systems to avoid memory issues at startup
+# Set PRELOAD_RAG=true in environment to load at startup (requires more memory)
+PRELOAD_RAG = os.getenv("PRELOAD_RAG", "false").lower() == "true"
 
-# Initialize PDF RAG system if available
-pdf_rag_system = None
-if PDF_RAG_ENABLED:
-    try:
-        print("[backend] Initializing PDF RAG system...")
-        pdf_rag_system = DualSourceRAG()
-        print("[backend] PDF RAG system ready!")
-    except Exception as e:
-        print(f"[backend] Warning: Could not initialize PDF RAG system: {e}")
-        pdf_rag_system = None
+_rag_system_instance = None
+_pdf_rag_system_instance = None
+
+def get_rag_system():
+    """Lazy-load RAG system on first use (or return preloaded instance)"""
+    global _rag_system_instance
+    if _rag_system_instance is None and RAG_ENABLED:
+        try:
+            print("[backend] Loading RAG system...")
+            _rag_system_instance = CareerRAG()
+            print("[backend] RAG system ready!")
+        except Exception as e:
+            print(f"[backend] Warning: Could not initialize RAG system: {e}")
+            _rag_system_instance = None
+    return _rag_system_instance
+
+def get_pdf_rag_system():
+    """Lazy-load PDF RAG system on first use (or return preloaded instance)"""
+    global _pdf_rag_system_instance
+    if _pdf_rag_system_instance is None and PDF_RAG_ENABLED:
+        try:
+            print("[backend] Loading PDF RAG system...")
+            _pdf_rag_system_instance = DualSourceRAG()
+            print("[backend] PDF RAG system ready!")
+        except Exception as e:
+            print(f"[backend] Warning: Could not initialize PDF RAG system: {e}")
+            _pdf_rag_system_instance = None
+    return _pdf_rag_system_instance
+
+# Optionally preload RAG systems at startup (if PRELOAD_RAG=true)
+if PRELOAD_RAG and RAG_ENABLED:
+    print("[backend] Preloading RAG systems at startup...")
+    get_rag_system()
+    get_pdf_rag_system()
+    print("[backend] RAG systems preloaded!")
 
 
 # ============================================
@@ -146,6 +166,7 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
 
     # Get RAG context if available
     rag_context = ""
+    rag_system = get_rag_system()
     if rag_system:
         try:
             rag_context = rag_system.get_context_for_agent(
@@ -212,6 +233,7 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
 
     # Get RAG context if available
     rag_context = ""
+    rag_system = get_rag_system()
     if rag_system:
         try:
             # Use the question for more relevant context retrieval
@@ -300,6 +322,20 @@ def health():
     return {"status": "healthy"}
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information"""
+    print("=" * 50)
+    print("🚀 Yuto Portfolio AI Backend started successfully!")
+    print(f"   RAG system available: {RAG_ENABLED}")
+    print(f"   PDF RAG system available: {PDF_RAG_ENABLED}")
+    if PRELOAD_RAG:
+        print("   RAG systems: Preloaded at startup")
+    else:
+        print("   RAG systems: Lazy-loaded on first use")
+    print("=" * 50)
+
+
 @app.post("/api/agent", response_model=SummaryResponse | ChatResponse)
 def agent_endpoint(payload: AgentRequest):
     if not ANTHROPIC_API_KEY:
@@ -352,6 +388,7 @@ async def upload_pdf(
     """
     print(f"[backend] Upload request received: {file.filename}, type: {source_type}, company: {company}")
 
+    pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
             status_code=500,
@@ -418,6 +455,7 @@ async def list_documents():
     Returns:
         Documents grouped by source type
     """
+    pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
             status_code=500,
@@ -445,6 +483,7 @@ async def delete_document(doc_id: str):
     Returns:
         Deletion result
     """
+    pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
             status_code=500,
@@ -492,6 +531,7 @@ async def generate_career_path(payload: CareerPathRequest):
     Returns:
         Personalized career path with gap analysis and learning steps
     """
+    pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
             status_code=500,
