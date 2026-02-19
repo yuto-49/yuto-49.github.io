@@ -1,55 +1,3 @@
-
-
-// Custom Cursor
-const cursor = document.querySelector('.cursor');
-const cursorFollower = document.querySelector('.cursor-follower');
-
-let mouseX = 0;
-let mouseY = 0;
-let followerX = 0;
-let followerY = 0;
-
-// Update cursor position
-function updateCursor(e) {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-  
-  cursor.style.left = mouseX + 'px';
-  cursor.style.top = mouseY + 'px';
-}
-
-// Smooth follower animation
-function animateFollower() {
-  followerX += (mouseX - followerX) * 0.1;
-  followerY += (mouseY - followerY) * 0.1;
-  
-  cursorFollower.style.left = followerX + 'px';
-  cursorFollower.style.top = followerY + 'px';
-  
-  requestAnimationFrame(animateFollower);
-}
-
-// Initialize cursor
-if (window.innerWidth > 480) {
-  document.addEventListener('mousemove', updateCursor);
-  animateFollower();
-  
-  // Cursor hover effects
-  const hoverElements = document.querySelectorAll('a, button, .project-image-wrapper, .skill-tag, .tech, .contact-item');
-  
-  hoverElements.forEach(el => {
-    el.addEventListener('mouseenter', () => {
-      cursor.classList.add('hover');
-      cursorFollower.classList.add('hover');
-    });
-    
-    el.addEventListener('mouseleave', () => {
-      cursor.classList.remove('hover');
-      cursorFollower.classList.remove('hover');
-    });
-  });
-}
-
 // ============================================
 // Smooth Scroll
 // ============================================
@@ -59,12 +7,12 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     e.preventDefault();
     const targetId = this.getAttribute('href');
     if (targetId === '#') return;
-    
+
     const target = document.querySelector(targetId);
     if (target) {
       const navHeight = document.querySelector('.navbar').offsetHeight;
       const targetPosition = target.offsetTop - navHeight;
-      
+
       window.scrollTo({
         top: targetPosition,
         behavior: 'smooth'
@@ -74,12 +22,12 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 });
 
 // ============================================
-// Scroll Animations
+// Scroll Animations (fade-in only)
 // ============================================
 
 const observerOptions = {
-  threshold: 0.2,
-  rootMargin: '0px 0px -100px 0px'
+  threshold: 0.15,
+  rootMargin: '0px 0px -60px 0px'
 };
 
 const observer = new IntersectionObserver((entries) => {
@@ -91,41 +39,8 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, observerOptions);
 
-// Observe project items
 document.querySelectorAll('.project-item').forEach(el => {
   observer.observe(el);
-});
-
-// ============================================
-// Parallax Effect for Hero
-// ============================================
-
-const heroSection = document.querySelector('.hero-section');
-const heroImage = document.querySelector('.hero-image');
-
-function handleParallax() {
-  const scrollY = window.scrollY;
-  const heroHeight = heroSection.offsetHeight;
-  
-  if (scrollY < heroHeight) {
-    const parallaxValue = scrollY * 0.3;
-    if (heroImage) {
-      heroImage.style.transform = `translateY(${parallaxValue}px)`;
-      heroImage.style.opacity = 1 - (scrollY / heroHeight) * 0.5;
-    }
-  }
-}
-
-// Throttle scroll events
-let ticking = false;
-window.addEventListener('scroll', () => {
-  if (!ticking) {
-    window.requestAnimationFrame(() => {
-      handleParallax();
-      ticking = false;
-    });
-    ticking = true;
-  }
 });
 
 // ============================================
@@ -135,11 +50,9 @@ window.addEventListener('scroll', () => {
 const navbar = document.querySelector('.navbar');
 
 function updateNavbar() {
-  if (window.scrollY > 50) {
-    navbar.style.background = 'rgba(10, 10, 10, 0.95)';
-    navbar.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.3)';
+  if (window.scrollY > 10) {
+    navbar.style.boxShadow = '0 1px 6px rgba(0, 0, 0, 0.06)';
   } else {
-    navbar.style.background = 'rgba(10, 10, 10, 0.8)';
     navbar.style.boxShadow = 'none';
   }
 }
@@ -176,32 +89,6 @@ function highlightActiveSection() {
 
 window.addEventListener('scroll', highlightActiveSection);
 
-// Add active state styling
-const style = document.createElement('style');
-style.textContent = `
-  .nav-link.active {
-    color: var(--text-primary);
-  }
-  .nav-link.active::after {
-    width: 100%;
-  }
-`;
-document.head.appendChild(style);
-
-// ============================================
-// Project Image Hover Effects
-// ============================================
-
-document.querySelectorAll('.project-image-wrapper').forEach(wrapper => {
-  wrapper.addEventListener('mouseenter', function() {
-    this.style.transform = 'scale(1.05)';
-  });
-  
-  wrapper.addEventListener('mouseleave', function() {
-    this.style.transform = 'scale(1)';
-  });
-});
-
 // ============================================
 // Smooth Page Load
 // ============================================
@@ -209,28 +96,9 @@ document.querySelectorAll('.project-image-wrapper').forEach(wrapper => {
 window.addEventListener('load', () => {
   document.body.style.opacity = '0';
   setTimeout(() => {
-    document.body.style.transition = 'opacity 0.5s ease';
+    document.body.style.transition = 'opacity 0.4s ease';
     document.body.style.opacity = '1';
-  }, 100);
-});
-
-// ============================================
-// Text Reveal Animation
-// ============================================
-
-function revealText() {
-  const textElements = document.querySelectorAll('.hero-title .line');
-  
-  textElements.forEach((el, index) => {
-    setTimeout(() => {
-      el.style.transform = 'translateY(0)';
-    }, index * 200);
-  });
-}
-
-// Initialize on load
-window.addEventListener('load', () => {
-  revealText();
+  }, 50);
 });
 
 // ============================================
@@ -239,13 +107,13 @@ window.addEventListener('load', () => {
 
 function animateNumbers() {
   const statNumbers = document.querySelectorAll('.stat-number');
-  
+
   statNumbers.forEach(stat => {
     const target = parseInt(stat.textContent);
     const duration = 2000;
     const increment = target / (duration / 16);
     let current = 0;
-    
+
     const timer = setInterval(() => {
       current += increment;
       if (current >= target) {
@@ -258,7 +126,6 @@ function animateNumbers() {
   });
 }
 
-// Trigger when about section is visible
 const aboutObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -274,50 +141,29 @@ if (aboutSection) {
 }
 
 // ============================================
-// Smooth Scroll for Project Links
-// ============================================
-
-document.querySelectorAll('.project-link').forEach(link => {
-  link.addEventListener('click', function(e) {
-    e.preventDefault();
-    // Add your project link logic here
-    console.log('Project link clicked');
-  });
-});
-
-// ============================================
 // Project Details Toggle
 // ============================================
 
 function initializeProjectToggles() {
   const toggleButtons = document.querySelectorAll('.project-toggle');
-  console.log('Found', toggleButtons.length, 'toggle buttons');
 
-  toggleButtons.forEach((button, index) => {
-    console.log('Attaching click handler to button', index + 1);
+  toggleButtons.forEach((button) => {
     button.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
-
-      console.log('Button clicked!', index + 1);
 
       const wrapper = this.closest('.project-details-wrapper');
       const details = wrapper.querySelector('.project-details');
       const toggleText = this.querySelector('.toggle-text');
 
-      // Toggle the expanded/collapsed state
       if (details.classList.contains('collapsed')) {
-        console.log('Expanding details...');
         details.classList.remove('collapsed');
-        // Force a reflow to enable transition
         void details.offsetHeight;
         details.classList.add('expanded');
         this.classList.add('active');
         toggleText.textContent = 'Read Less';
       } else {
-        console.log('Collapsing details...');
         details.classList.remove('expanded');
-        // Add collapsed after transition
         setTimeout(() => {
           if (!details.classList.contains('expanded')) {
             details.classList.add('collapsed');
@@ -330,24 +176,15 @@ function initializeProjectToggles() {
   });
 }
 
-// Initialize when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeProjectToggles);
 } else {
   initializeProjectToggles();
 }
 
-console.log('Project toggle script loaded. DOM state:', document.readyState);
-
 // ============================================
 // AI Career Agents (Crew AI + Claude backend hook)
 // ============================================
-
-// IMPORTANT:
-// - This front-end does NOT talk directly to Claude or Crew AI.
-// - You should create a backend endpoint (Node/Express, Python/FastAPI, etc.)
-//   that uses Crew AI + Claude, then set AI_BACKEND_URL to that endpoint.
-// - Never expose your API keys in this file or in the browser.
 
 const AI_BACKEND_URL = '/api/agent';
 
@@ -412,7 +249,7 @@ if (aiSection) {
         },
         body: JSON.stringify({
           mode: 'summary',
-          agentType: agent, // "finance" | "healthcare" | "consultant"
+          agentType: agent,
           profile
         })
       });
@@ -477,7 +314,6 @@ if (aiSection) {
     }
   }
 
-  // Agent selection
   agentButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       agentButtons.forEach(b => b.classList.remove('active'));
@@ -489,7 +325,6 @@ if (aiSection) {
     });
   });
 
-  // Chat form
   if (formEl && questionInput) {
     formEl.addEventListener('submit', e => {
       e.preventDefault();
@@ -512,7 +347,6 @@ if (aiSection) {
 const API_BASE = '/api';
 
 function initializePDFFeatures() {
-  // Resume PDF upload
   const resumeForm = document.getElementById('upload-resume-form');
   const resumeStatus = document.getElementById('resume-status');
 
@@ -523,14 +357,14 @@ function initializePDFFeatures() {
       const fileInput = document.getElementById('resume-file');
 
       if (!fileInput.files[0]) {
-        setStatusMessage(resumeStatus, '✗ Please select a PDF file', 'error');
+        setStatusMessage(resumeStatus, 'Please select a PDF file', 'error');
         return;
       }
 
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       formData.append('source_type', 'resume');
-      formData.append('company', ''); // Not needed for resume
+      formData.append('company', '');
 
       setStatusMessage(resumeStatus, 'Uploading and indexing resume...', 'loading');
 
@@ -543,20 +377,18 @@ function initializePDFFeatures() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-          setStatusMessage(resumeStatus, `✓ ${result.message} (${result.chunks} chunks)`, 'success');
+          setStatusMessage(resumeStatus, `${result.message} (${result.chunks} chunks)`, 'success');
           resumeForm.reset();
-          // Refresh documents list
           setTimeout(loadDocuments, 500);
         } else {
-          setStatusMessage(resumeStatus, `✗ Error: ${result.detail || 'Unknown error'}`, 'error');
+          setStatusMessage(resumeStatus, `Error: ${result.detail || 'Unknown error'}`, 'error');
         }
       } catch (error) {
-        setStatusMessage(resumeStatus, `✗ Error: ${error.message}`, 'error');
+        setStatusMessage(resumeStatus, `Error: ${error.message}`, 'error');
       }
     });
   }
 
-  // Company PDF upload
   const uploadForm = document.getElementById('upload-company-form');
   const uploadStatus = document.getElementById('upload-status');
 
@@ -569,7 +401,7 @@ function initializePDFFeatures() {
       const sourceTypeSelect = document.getElementById('source-type');
 
       if (!fileInput.files[0]) {
-        setStatusMessage(uploadStatus, '✗ Please select a PDF file', 'error');
+        setStatusMessage(uploadStatus, 'Please select a PDF file', 'error');
         return;
       }
 
@@ -589,26 +421,23 @@ function initializePDFFeatures() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-          setStatusMessage(uploadStatus, `✓ ${result.message} (${result.chunks} chunks)`, 'success');
+          setStatusMessage(uploadStatus, `${result.message} (${result.chunks} chunks)`, 'success');
           uploadForm.reset();
-          // Refresh documents list
           setTimeout(loadDocuments, 500);
         } else {
-          setStatusMessage(uploadStatus, `✗ Error: ${result.detail || 'Unknown error'}`, 'error');
+          setStatusMessage(uploadStatus, `Error: ${result.detail || 'Unknown error'}`, 'error');
         }
       } catch (error) {
-        setStatusMessage(uploadStatus, `✗ Error: ${error.message}`, 'error');
+        setStatusMessage(uploadStatus, `Error: ${error.message}`, 'error');
       }
     });
   }
 
-  // Refresh documents button
   const refreshDocsBtn = document.getElementById('refresh-docs-btn');
   if (refreshDocsBtn) {
     refreshDocsBtn.addEventListener('click', loadDocuments);
   }
 
-  // Career path generation
   const careerPathForm = document.getElementById('career-path-form');
   const careerPathStatus = document.getElementById('career-path-status');
   const careerPathOutput = document.getElementById('career-path-output');
@@ -638,19 +467,18 @@ function initializePDFFeatures() {
         const result = await response.json();
 
         if (response.ok) {
-          setStatusMessage(careerPathStatus, '✓ Career path generated successfully!', 'success');
+          setStatusMessage(careerPathStatus, 'Career path generated successfully!', 'success');
           careerPathOutput.textContent = result.career_path;
           careerPathOutput.classList.add('visible');
         } else {
-          setStatusMessage(careerPathStatus, `✗ Error: ${result.detail || 'Unknown error'}`, 'error');
+          setStatusMessage(careerPathStatus, `Error: ${result.detail || 'Unknown error'}`, 'error');
         }
       } catch (error) {
-        setStatusMessage(careerPathStatus, `✗ Error: ${error.message}`, 'error');
+        setStatusMessage(careerPathStatus, `Error: ${error.message}`, 'error');
       }
     });
   }
 
-  // Load documents on page load
   loadDocuments();
 }
 
@@ -685,30 +513,27 @@ function displayDocuments(documents) {
 
   let html = '';
 
-  // Resume documents
   if (documents.resume.length > 0) {
     html += '<div class="document-group">';
-    html += '<div class="document-group-title">📄 Resume</div>';
+    html += '<div class="document-group-title">Resume</div>';
     documents.resume.forEach(doc => {
       html += createDocumentItem(doc);
     });
     html += '</div>';
   }
 
-  // Company PDFs
   if (documents.company_pdf.length > 0) {
     html += '<div class="document-group">';
-    html += '<div class="document-group-title">🏢 Company Documents</div>';
+    html += '<div class="document-group-title">Company Documents</div>';
     documents.company_pdf.forEach(doc => {
       html += createDocumentItem(doc);
     });
     html += '</div>';
   }
 
-  // Project PDFs
   if (documents.project_pdf.length > 0) {
     html += '<div class="document-group">';
-    html += '<div class="document-group-title">📚 Project Documents</div>';
+    html += '<div class="document-group-title">Project Documents</div>';
     documents.project_pdf.forEach(doc => {
       html += createDocumentItem(doc);
     });
@@ -717,7 +542,6 @@ function displayDocuments(documents) {
 
   documentsList.innerHTML = html;
 
-  // Add delete button event listeners
   documentsList.querySelectorAll('.document-delete').forEach(btn => {
     btn.addEventListener('click', () => {
       const docId = btn.dataset.docId;
@@ -727,14 +551,14 @@ function displayDocuments(documents) {
 }
 
 function createDocumentItem(doc) {
-  const company = doc.company ? ` • ${doc.company}` : '';
+  const company = doc.company ? ` · ${doc.company}` : '';
   const date = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '';
 
   return `
     <div class="document-item">
       <div class="document-info">
         <div class="document-filename">${doc.filename}</div>
-        <div class="document-meta">${date}${company} • ${doc.total_chunks} chunks</div>
+        <div class="document-meta">${date}${company} · ${doc.total_chunks} chunks</div>
       </div>
       <button class="document-delete" data-doc-id="${doc.doc_id}">Delete</button>
     </div>
@@ -754,7 +578,6 @@ async function deleteDocument(docId) {
     const result = await response.json();
 
     if (response.ok && result.success) {
-      // Refresh the documents list
       loadDocuments();
     } else {
       alert(`Error deleting document: ${result.detail || 'Unknown error'}`);
@@ -775,7 +598,6 @@ function setStatusMessage(element, message, type) {
   }
 }
 
-// Initialize PDF features when DOM is loaded
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePDFFeatures);
 } else {
