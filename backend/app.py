@@ -25,18 +25,23 @@ load_dotenv()
 # Import RAG systems (can be disabled via environment variable for memory-constrained deployments)
 RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
 
-try:
-    from rag_system import CareerRAG
-    RAG_ENABLED = not RAG_DISABLED
-except ImportError:
-    print("[backend] Warning: RAG system not available. Install dependencies: pip install chromadb sentence-transformers")
-    RAG_ENABLED = False
+if not RAG_DISABLED:
+    try:
+        from rag_system import CareerRAG
+        RAG_ENABLED = True
+    except ImportError:
+        print("[backend] Warning: RAG system not available. Install dependencies: pip install chromadb sentence-transformers")
+        RAG_ENABLED = False
 
-try:
-    from pdf_rag import DualSourceRAG
-    PDF_RAG_ENABLED = not RAG_DISABLED
-except ImportError:
-    print("[backend] Warning: PDF RAG system not available. Install dependencies: pip install pypdf")
+    try:
+        from pdf_rag import DualSourceRAG
+        PDF_RAG_ENABLED = True
+    except ImportError:
+        print("[backend] Warning: PDF RAG system not available. Install dependencies: pip install pypdf")
+        PDF_RAG_ENABLED = False
+else:
+    print("[backend] RAG systems disabled via DISABLE_RAG=true (saves ~500MB memory)")
+    RAG_ENABLED = False
     PDF_RAG_ENABLED = False
 
 # ============================================
