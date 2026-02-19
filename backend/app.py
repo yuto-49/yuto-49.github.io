@@ -1,14 +1,23 @@
 import os
 from typing import Literal, Optional, List
 from pathlib import Path
-import shutil
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from crewai import Agent, Task, Crew
+# Import CrewAI (optional - app will work without it but AI features will be disabled)
+try:
+    from crewai import Agent, Task, Crew
+    CREWAI_AVAILABLE = True
+except ImportError:
+    print("[backend] Warning: CrewAI not available. AI agent features will be disabled.")
+    CREWAI_AVAILABLE = False
+    Agent = None
+    Task = None
+    Crew = None
 
 # Load environment variables from .env file first
 load_dotenv()
@@ -34,18 +43,45 @@ except ImportError:
 # Environment & LLM setup
 # ============================================
 
+# Load API keys for supported LLM providers
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-if not ANTHROPIC_API_KEY:
-    print("[backend] Warning: ANTHROPIC_API_KEY is not set. Set it in your environment before using the API.")
+# LLM_PROVIDER: "anthropic" or "deepseek" (defaults to anthropic if available, else deepseek)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "").lower()
+
+# Auto-detect provider if not specified
+if not LLM_PROVIDER:
+    if ANTHROPIC_API_KEY:
+        LLM_PROVIDER = "anthropic"
+    elif DEEPSEEK_API_KEY:
+        LLM_PROVIDER = "deepseek"
+    else:
+        LLM_PROVIDER = "anthropic"  # Default, will show warning
 
 # Configure LLM for CrewAI using LiteLLM format
 # CrewAI uses LiteLLM under the hood, so we specify the model with provider prefix
-os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY or ""
+if ANTHROPIC_API_KEY:
+    os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY
+if DEEPSEEK_API_KEY:
+    os.environ["DEEPSEEK_API_KEY"] = DEEPSEEK_API_KEY
 
-# For CrewAI, we pass the model string directly and it uses LiteLLM
-# Use the format "anthropic/model-name" for Anthropic models
-LLM_MODEL = "anthropic/claude-3-haiku-20240307"
+# Available models per provider
+LLM_MODELS = {
+    "anthropic": "anthropic/claude-3-haiku-20240307",  # Fast and affordable
+    "deepseek": "deepseek/deepseek-chat",              # General purpose
+}
+
+# Set the active model based on provider
+LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, LLM_MODELS["anthropic"])
+
+# Validate API key for selected provider
+if LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
+    print("[backend] Warning: ANTHROPIC_API_KEY is not set but anthropic provider is selected.")
+elif LLM_PROVIDER == "deepseek" and not DEEPSEEK_API_KEY:
+    print("[backend] Warning: DEEPSEEK_API_KEY is not set but deepseek provider is selected.")
+else:
+    print(f"[backend] Using LLM provider: {LLM_PROVIDER} with model: {LLM_MODEL}")
 
 # ============================================
 # RAG System Initialization (Lazy Loading)
@@ -151,6 +187,9 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
     """
     Uses CrewAI to generate a 'future you' career story for the candidate.
     """
+    if not CREWAI_AVAILABLE:
+        raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
+    
     # Select the appropriate agent
     if agent_type == "finance":
         agent = create_finance_agent()
@@ -218,6 +257,9 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
     """
     Uses CrewAI agent to answer follow-up questions about the career path.
     """
+    if not CREWAI_AVAILABLE:
+        raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
+    
     # Select the appropriate agent
     if agent_type == "finance":
         agent = create_finance_agent()
@@ -298,7 +340,27 @@ class ChatResponse(BaseModel):
     answer: str
 
 
-app = FastAPI(title="Yuto Portfolio AI Backend", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    print("=" * 50)
+    print("Yuto Portfolio AI Backend started successfully!")
+    print(f"   LLM Provider: {LLM_PROVIDER} ({LLM_MODEL})")
+    print(f"   CrewAI available: {CREWAI_AVAILABLE}")
+    print(f"   RAG system available: {RAG_ENABLED}")
+    print(f"   PDF RAG system available: {PDF_RAG_ENABLED}")
+    if PRELOAD_RAG:
+        print("   RAG systems: Preloaded at startup")
+    else:
+        print("   RAG systems: Lazy-loaded on first use")
+    print("=" * 50)
+    yield
+    # Shutdown (if needed)
+    print("Shutting down Yuto Portfolio AI Backend...")
+
+
+app = FastAPI(title="Yuto Portfolio AI Backend", version="0.1.0", lifespan=lifespan)
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -322,26 +384,24 @@ def health():
     return {"status": "healthy"}
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Log startup information"""
-    print("=" * 50)
-    print("🚀 Yuto Portfolio AI Backend started successfully!")
-    print(f"   RAG system available: {RAG_ENABLED}")
-    print(f"   PDF RAG system available: {PDF_RAG_ENABLED}")
-    if PRELOAD_RAG:
-        print("   RAG systems: Preloaded at startup")
-    else:
-        print("   RAG systems: Lazy-loaded on first use")
-    print("=" * 50)
-
-
 @app.post("/api/agent", response_model=SummaryResponse | ChatResponse)
 def agent_endpoint(payload: AgentRequest):
-    if not ANTHROPIC_API_KEY:
+    if not CREWAI_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="CrewAI is not available. Please install it with: pip install crewai litellm",
+        )
+    
+    # Check if the API key for the selected provider is configured
+    if LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=500,
             detail="ANTHROPIC_API_KEY is not configured on the server.",
+        )
+    elif LLM_PROVIDER == "deepseek" and not DEEPSEEK_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="DEEPSEEK_API_KEY is not configured on the server.",
         )
 
     try:
@@ -531,6 +591,12 @@ async def generate_career_path(payload: CareerPathRequest):
     Returns:
         Personalized career path with gap analysis and learning steps
     """
+    if not CREWAI_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="CrewAI is not available. Please install it with: pip install crewai litellm",
+        )
+    
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
