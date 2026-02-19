@@ -32,13 +32,12 @@ open index.html
 
 ## Live Website
 
-Visit the live website at: **[https://yuto-49.github.io/yuto-portfolio/](https://yuto-49.github.io/yuto-portfolio/)**
+Visit the live website at: [**[https://yuto-49.github.io/yuto-portfolio/](https://yuto-49.github.io/yuto-portfolio/)**](https://yuto-portfolio.onrender.com/)
 
 ## Technologies Used
 
 - **Frontend**: HTML5, CSS3, JavaScript
 - **Backend**: Python, FastAPI, Uvicorn
-- **AI**: CrewAI, Anthropic Claude, RAG (ChromaDB, Sentence Transformers)
 - **Deployment**: Render, AWS (see [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md))
 
 ## Features
