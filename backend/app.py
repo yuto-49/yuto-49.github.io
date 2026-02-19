@@ -8,41 +8,63 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Import CrewAI (optional - app will work without it but AI features will be disabled)
-try:
-    from crewai import Agent, Task, Crew
-    CREWAI_AVAILABLE = True
-except ImportError:
-    print("[backend] Warning: CrewAI not available. AI agent features will be disabled.")
-    CREWAI_AVAILABLE = False
-    Agent = None
-    Task = None
-    Crew = None
-
 # Load environment variables from .env file first
 load_dotenv()
 
-# Import RAG systems (can be disabled via environment variable for memory-constrained deployments)
-RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
+# ============================================
+# Lazy imports for heavy dependencies
+# CrewAI and RAG are loaded on first use, not at startup,
+# so uvicorn can bind the port immediately on Render.
+# ============================================
 
-if not RAG_DISABLED:
+CREWAI_AVAILABLE = None  # None = not yet checked
+RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
+RAG_ENABLED = None
+PDF_RAG_ENABLED = None
+
+_crewai_modules = {}
+
+def _ensure_crewai():
+    """Lazy-load CrewAI on first use."""
+    global CREWAI_AVAILABLE, _crewai_modules
+    if CREWAI_AVAILABLE is not None:
+        return CREWAI_AVAILABLE
+    try:
+        from crewai import Agent, Task, Crew
+        _crewai_modules["Agent"] = Agent
+        _crewai_modules["Task"] = Task
+        _crewai_modules["Crew"] = Crew
+        CREWAI_AVAILABLE = True
+        print("[backend] CrewAI loaded successfully.")
+    except ImportError:
+        print("[backend] Warning: CrewAI not available. AI agent features will be disabled.")
+        CREWAI_AVAILABLE = False
+    return CREWAI_AVAILABLE
+
+def _ensure_rag():
+    """Lazy-load RAG systems on first use."""
+    global RAG_ENABLED, PDF_RAG_ENABLED
+    if RAG_ENABLED is not None:
+        return
+    if RAG_DISABLED:
+        print("[backend] RAG systems disabled via DISABLE_RAG=true (saves ~500MB memory)")
+        RAG_ENABLED = False
+        PDF_RAG_ENABLED = False
+        return
     try:
         from rag_system import CareerRAG
+        _crewai_modules["CareerRAG"] = CareerRAG
         RAG_ENABLED = True
     except ImportError:
-        print("[backend] Warning: RAG system not available. Install dependencies: pip install chromadb sentence-transformers")
+        print("[backend] Warning: RAG system not available.")
         RAG_ENABLED = False
-
     try:
         from pdf_rag import DualSourceRAG
+        _crewai_modules["DualSourceRAG"] = DualSourceRAG
         PDF_RAG_ENABLED = True
     except ImportError:
-        print("[backend] Warning: PDF RAG system not available. Install dependencies: pip install pypdf")
+        print("[backend] Warning: PDF RAG system not available.")
         PDF_RAG_ENABLED = False
-else:
-    print("[backend] RAG systems disabled via DISABLE_RAG=true (saves ~500MB memory)")
-    RAG_ENABLED = False
-    PDF_RAG_ENABLED = False
 
 # ============================================
 # Environment & LLM setup
@@ -92,21 +114,20 @@ else:
 # RAG System Initialization (Lazy Loading)
 # ============================================
 
-# Lazy-loaded RAG systems to avoid memory issues at startup
-# Set PRELOAD_RAG=true in environment to load at startup (requires more memory)
-PRELOAD_RAG = os.getenv("PRELOAD_RAG", "false").lower() == "true"
-
 _rag_system_instance = None
 _pdf_rag_system_instance = None
 
 def get_rag_system():
     """Lazy-load RAG system on first use (or return preloaded instance)"""
     global _rag_system_instance
+    _ensure_rag()
     if _rag_system_instance is None and RAG_ENABLED:
         try:
             print("[backend] Loading RAG system...")
-            _rag_system_instance = CareerRAG()
-            print("[backend] RAG system ready!")
+            CareerRAG = _crewai_modules.get("CareerRAG")
+            if CareerRAG:
+                _rag_system_instance = CareerRAG()
+                print("[backend] RAG system ready!")
         except Exception as e:
             print(f"[backend] Warning: Could not initialize RAG system: {e}")
             _rag_system_instance = None
@@ -115,30 +136,26 @@ def get_rag_system():
 def get_pdf_rag_system():
     """Lazy-load PDF RAG system on first use (or return preloaded instance)"""
     global _pdf_rag_system_instance
+    _ensure_rag()
     if _pdf_rag_system_instance is None and PDF_RAG_ENABLED:
         try:
             print("[backend] Loading PDF RAG system...")
-            _pdf_rag_system_instance = DualSourceRAG()
-            print("[backend] PDF RAG system ready!")
+            DualSourceRAG = _crewai_modules.get("DualSourceRAG")
+            if DualSourceRAG:
+                _pdf_rag_system_instance = DualSourceRAG()
+                print("[backend] PDF RAG system ready!")
         except Exception as e:
             print(f"[backend] Warning: Could not initialize PDF RAG system: {e}")
             _pdf_rag_system_instance = None
     return _pdf_rag_system_instance
-
-# Optionally preload RAG systems at startup (if PRELOAD_RAG=true)
-if PRELOAD_RAG and RAG_ENABLED:
-    print("[backend] Preloading RAG systems at startup...")
-    get_rag_system()
-    get_pdf_rag_system()
-    print("[backend] RAG systems preloaded!")
-
-
 # ============================================
 # CrewAI Agent Definitions
 # ============================================
 
 def create_finance_agent():
     """Create a finance career advisor agent"""
+    _ensure_crewai()
+    Agent = _crewai_modules["Agent"]
     return Agent(
         role="Finance Career Advisor",
         goal="Design a realistic and inspiring finance career path for this candidate",
@@ -155,6 +172,7 @@ def create_finance_agent():
 
 def create_healthcare_agent():
     """Create a healthcare data & technology career advisor agent"""
+    Agent = _crewai_modules["Agent"]
     return Agent(
         role="Healthcare Data & Technology Career Advisor",
         goal="Map out how this candidate could impact healthcare using data, software, and AI",
@@ -171,6 +189,7 @@ def create_healthcare_agent():
 
 def create_consultant_agent():
     """Create a strategy & technology consultant career advisor agent"""
+    Agent = _crewai_modules["Agent"]
     return Agent(
         role="Strategy & Technology Consultant Career Advisor",
         goal="Explain how this candidate could become a consultant using their CS and analytical skills",
@@ -192,8 +211,10 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
     """
     Uses CrewAI to generate a 'future you' career story for the candidate.
     """
-    if not CREWAI_AVAILABLE:
+    if not _ensure_crewai():
         raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
+    Task = _crewai_modules["Task"]
+    Crew = _crewai_modules["Crew"]
     
     # Select the appropriate agent
     if agent_type == "finance":
@@ -262,8 +283,10 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
     """
     Uses CrewAI agent to answer follow-up questions about the career path.
     """
-    if not CREWAI_AVAILABLE:
+    if not _ensure_crewai():
         raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
+    Task = _crewai_modules["Task"]
+    Crew = _crewai_modules["Crew"]
     
     # Select the appropriate agent
     if agent_type == "finance":
@@ -352,13 +375,8 @@ async def lifespan(_app: FastAPI):
     print("=" * 50)
     print("Yuto Portfolio AI Backend started successfully!")
     print(f"   LLM Provider: {LLM_PROVIDER} ({LLM_MODEL})")
-    print(f"   CrewAI available: {CREWAI_AVAILABLE}")
-    print(f"   RAG system available: {RAG_ENABLED}")
-    print(f"   PDF RAG system available: {PDF_RAG_ENABLED}")
-    if PRELOAD_RAG:
-        print("   RAG systems: Preloaded at startup")
-    else:
-        print("   RAG systems: Lazy-loaded on first use")
+    print(f"   CrewAI: lazy-loaded on first request")
+    print(f"   RAG disabled: {RAG_DISABLED}")
     print("=" * 50)
     yield
     # Shutdown (if needed)
@@ -391,7 +409,7 @@ def health():
 
 @app.post("/api/agent", response_model=SummaryResponse | ChatResponse)
 def agent_endpoint(payload: AgentRequest):
-    if not CREWAI_AVAILABLE:
+    if not _ensure_crewai():
         raise HTTPException(
             status_code=503,
             detail="CrewAI is not available. Please install it with: pip install crewai litellm",
@@ -596,12 +614,15 @@ async def generate_career_path(payload: CareerPathRequest):
     Returns:
         Personalized career path with gap analysis and learning steps
     """
-    if not CREWAI_AVAILABLE:
+    if not _ensure_crewai():
         raise HTTPException(
             status_code=503,
             detail="CrewAI is not available. Please install it with: pip install crewai litellm",
         )
-    
+    Agent = _crewai_modules["Agent"]
+    Task = _crewai_modules["Task"]
+    Crew = _crewai_modules["Crew"]
+
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
         raise HTTPException(
