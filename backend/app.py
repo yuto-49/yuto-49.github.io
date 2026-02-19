@@ -377,13 +377,13 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     """Health check endpoint"""
     return {"status": "ok", "message": "Yuto Portfolio AI Backend is running"}
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     """Health check endpoint for Render"""
     return {"status": "healthy"}

@@ -1,4 +1,4 @@
-setuptools>=69.0.0
+setuptools>=69.0.0,<81
 anthropic==0.75.0
 chromadb==1.4.0
 crewai==0.86.0
