@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -395,11 +397,8 @@ app.add_middleware(
 )
 
 
-@app.api_route("/", methods=["GET", "HEAD"])
-def root():
-    """Health check endpoint"""
-    return {"status": "ok", "message": "Yuto Portfolio AI Backend is running"}
-
+# Frontend static files directory (one level up from backend/)
+FRONTEND_DIR = Path(__file__).parent.parent
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
@@ -722,6 +721,43 @@ async def generate_career_path(payload: CareerPathRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating career path: {str(e)}")
+
+
+# ============================================
+# Static Frontend Serving
+# Serve index.html, style.css, script.js, assets/
+# Must be AFTER all API routes to avoid overriding them.
+# ============================================
+
+@app.api_route("/", methods=["GET", "HEAD"])
+def serve_index():
+    """Serve the frontend index.html"""
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"status": "ok", "message": "Yuto Portfolio AI Backend is running"}
+
+@app.get("/resume.html")
+def serve_resume():
+    """Serve resume page"""
+    return FileResponse(FRONTEND_DIR / "resume.html")
+
+# Serve static assets (images, PDFs, etc.)
+if (FRONTEND_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
+
+# Serve root-level static files (style.css, script.js)
+@app.get("/{filename:path}")
+def serve_static(filename: str):
+    """Catch-all: serve static files from the frontend directory"""
+    file_path = FRONTEND_DIR / filename
+    if file_path.is_file() and file_path.suffix in {".css", ".js", ".html", ".png", ".jpg", ".ico", ".svg", ".pdf"}:
+        return FileResponse(file_path)
+    # Fall back to index.html for SPA-style routing
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 # Convenience for local dev:
