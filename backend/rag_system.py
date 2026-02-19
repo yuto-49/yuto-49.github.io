@@ -1,6 +1,6 @@
 """
 RAG System for Career Agents
-Uses ChromaDB + SentenceTransformers for semantic search over job examples.
+Uses ChromaDB with built-in ONNX embeddings for semantic search over job examples.
 """
 
 import json
@@ -9,7 +9,6 @@ from typing import List, Dict, Any, Optional
 
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 
 
 # ============================================
@@ -25,7 +24,6 @@ class CareerRAG:
         self,
         data_dir: Path = None,
         chroma_dir: Path = None,
-        embedding_model: str = "all-MiniLM-L6-v2"
     ):
         """
         Initialize the RAG system.
@@ -33,7 +31,6 @@ class CareerRAG:
         Args:
             data_dir: Directory containing JSONL files with career examples
             chroma_dir: Directory for ChromaDB persistent storage
-            embedding_model: SentenceTransformer model name
         """
         if data_dir is None:
             data_dir = Path(__file__).parent / "data" / "company_examples"
@@ -45,12 +42,8 @@ class CareerRAG:
         self.chroma_dir = Path(chroma_dir)
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize embedding model
-        print(f"📦 Loading embedding model: {embedding_model}")
-        self.embedding_model = SentenceTransformer(embedding_model)
-
-        # Initialize ChromaDB
-        print(f"🗄️  Initializing ChromaDB at: {self.chroma_dir}")
+        # Initialize ChromaDB (uses built-in ONNX embeddings — no PyTorch needed)
+        print(f"[RAG] Initializing ChromaDB at: {self.chroma_dir}")
         self.client = chromadb.PersistentClient(
             path=str(self.chroma_dir),
             settings=Settings(anonymized_telemetry=False)

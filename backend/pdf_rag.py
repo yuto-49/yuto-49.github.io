@@ -11,7 +11,6 @@ from typing import List, Dict, Any, Optional, Literal
 from pypdf import PdfReader
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 
 
 # ============================================
@@ -60,7 +59,6 @@ class DualSourceRAG:
     def __init__(
         self,
         chroma_dir: Path = None,
-        embedding_model: str = "all-MiniLM-L6-v2"
     ):
         """
         Initialize dual-source RAG system.
@@ -71,12 +69,8 @@ class DualSourceRAG:
         self.chroma_dir = Path(chroma_dir)
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize embedding model
-        print(f"📦 Loading embedding model: {embedding_model}")
-        self.embedding_model = SentenceTransformer(embedding_model)
-
-        # Initialize ChromaDB
-        print(f"🗄️  Initializing ChromaDB at: {self.chroma_dir}")
+        # Initialize ChromaDB (uses built-in ONNX embeddings — no PyTorch needed)
+        print(f"[PDF-RAG] Initializing ChromaDB at: {self.chroma_dir}")
         self.client = chromadb.PersistentClient(
             path=str(self.chroma_dir),
             settings=Settings(anonymized_telemetry=False)
