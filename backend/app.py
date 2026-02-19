@@ -15,33 +15,36 @@ load_dotenv()
 
 # ============================================
 # Lazy imports for heavy dependencies
-# CrewAI and RAG are loaded on first use, not at startup,
+# LangChain and RAG are loaded on first use, not at startup,
 # so uvicorn can bind the port immediately on Render.
 # ============================================
 
-CREWAI_AVAILABLE = None  # None = not yet checked
+LANGCHAIN_AVAILABLE = None  # None = not yet checked
 RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
 RAG_ENABLED = None
 PDF_RAG_ENABLED = None
 
-_crewai_modules = {}
+_lazy_modules = {}
 
-def _ensure_crewai():
-    """Lazy-load CrewAI on first use."""
-    global CREWAI_AVAILABLE, _crewai_modules
-    if CREWAI_AVAILABLE is not None:
-        return CREWAI_AVAILABLE
+
+def _ensure_langchain():
+    """Lazy-load LangChain on first use."""
+    global LANGCHAIN_AVAILABLE, _lazy_modules
+    if LANGCHAIN_AVAILABLE is not None:
+        return LANGCHAIN_AVAILABLE
     try:
-        from crewai import Agent, Task, Crew
-        _crewai_modules["Agent"] = Agent
-        _crewai_modules["Task"] = Task
-        _crewai_modules["Crew"] = Crew
-        CREWAI_AVAILABLE = True
-        print("[backend] CrewAI loaded successfully.")
+        from langchain_anthropic import ChatAnthropic
+        from langchain_core.messages import SystemMessage, HumanMessage
+        _lazy_modules["ChatAnthropic"] = ChatAnthropic
+        _lazy_modules["SystemMessage"] = SystemMessage
+        _lazy_modules["HumanMessage"] = HumanMessage
+        LANGCHAIN_AVAILABLE = True
+        print("[backend] LangChain loaded successfully.")
     except ImportError:
-        print("[backend] Warning: CrewAI not available. AI agent features will be disabled.")
-        CREWAI_AVAILABLE = False
-    return CREWAI_AVAILABLE
+        print("[backend] Warning: LangChain not available. AI agent features will be disabled.")
+        LANGCHAIN_AVAILABLE = False
+    return LANGCHAIN_AVAILABLE
+
 
 def _ensure_rag():
     """Lazy-load RAG systems on first use."""
@@ -55,14 +58,14 @@ def _ensure_rag():
         return
     try:
         from rag_system import CareerRAG
-        _crewai_modules["CareerRAG"] = CareerRAG
+        _lazy_modules["CareerRAG"] = CareerRAG
         RAG_ENABLED = True
     except ImportError:
         print("[backend] Warning: RAG system not available.")
         RAG_ENABLED = False
     try:
         from pdf_rag import DualSourceRAG
-        _crewai_modules["DualSourceRAG"] = DualSourceRAG
+        _lazy_modules["DualSourceRAG"] = DualSourceRAG
         PDF_RAG_ENABLED = True
     except ImportError:
         print("[backend] Warning: PDF RAG system not available.")
@@ -72,45 +75,43 @@ def _ensure_rag():
 # Environment & LLM setup
 # ============================================
 
-# Load API keys for supported LLM providers
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-# LLM_PROVIDER: "anthropic" or "deepseek" (defaults to anthropic if available, else deepseek)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "").lower()
-
-# Auto-detect provider if not specified
-if not LLM_PROVIDER:
-    if ANTHROPIC_API_KEY:
-        LLM_PROVIDER = "anthropic"
-    elif DEEPSEEK_API_KEY:
-        LLM_PROVIDER = "deepseek"
-    else:
-        LLM_PROVIDER = "anthropic"  # Default, will show warning
-
-# Configure LLM for CrewAI using LiteLLM format
-# CrewAI uses LiteLLM under the hood, so we specify the model with provider prefix
 if ANTHROPIC_API_KEY:
     os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY
-if DEEPSEEK_API_KEY:
-    os.environ["DEEPSEEK_API_KEY"] = DEEPSEEK_API_KEY
 
-# Available models per provider
-LLM_MODELS = {
-    "anthropic": "anthropic/claude-3-haiku-20240307",  # Fast and affordable
-    "deepseek": "deepseek/deepseek-chat",              # General purpose
-}
+# Model to use — Claude 3 Haiku is fast and affordable
+LLM_MODEL = os.getenv("LLM_MODEL", "claude-3-haiku-20240307")
 
-# Set the active model based on provider
-LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, LLM_MODELS["anthropic"])
-
-# Validate API key for selected provider
-if LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
-    print("[backend] Warning: ANTHROPIC_API_KEY is not set but anthropic provider is selected.")
-elif LLM_PROVIDER == "deepseek" and not DEEPSEEK_API_KEY:
-    print("[backend] Warning: DEEPSEEK_API_KEY is not set but deepseek provider is selected.")
+if not ANTHROPIC_API_KEY:
+    print("[backend] Warning: ANTHROPIC_API_KEY is not set. AI agent features will fail.")
 else:
-    print(f"[backend] Using LLM provider: {LLM_PROVIDER} with model: {LLM_MODEL}")
+    print(f"[backend] Using model: {LLM_MODEL}")
+
+
+# ============================================
+# LLM instance (lazy-loaded)
+# ============================================
+
+_llm_instance = None
+
+
+def get_llm():
+    """Get or create the LangChain ChatAnthropic instance."""
+    global _llm_instance
+    if _llm_instance is not None:
+        return _llm_instance
+    if not _ensure_langchain():
+        return None
+    ChatAnthropic = _lazy_modules["ChatAnthropic"]
+    _llm_instance = ChatAnthropic(
+        model=LLM_MODEL,
+        temperature=0.7,
+        max_tokens=2048,
+    )
+    print(f"[backend] LLM initialized: {LLM_MODEL}")
+    return _llm_instance
+
 
 # ============================================
 # RAG System Initialization (Lazy Loading)
@@ -119,14 +120,15 @@ else:
 _rag_system_instance = None
 _pdf_rag_system_instance = None
 
+
 def get_rag_system():
-    """Lazy-load RAG system on first use (or return preloaded instance)"""
+    """Lazy-load RAG system on first use."""
     global _rag_system_instance
     _ensure_rag()
     if _rag_system_instance is None and RAG_ENABLED:
         try:
             print("[backend] Loading RAG system...")
-            CareerRAG = _crewai_modules.get("CareerRAG")
+            CareerRAG = _lazy_modules.get("CareerRAG")
             if CareerRAG:
                 _rag_system_instance = CareerRAG()
                 print("[backend] RAG system ready!")
@@ -135,14 +137,15 @@ def get_rag_system():
             _rag_system_instance = None
     return _rag_system_instance
 
+
 def get_pdf_rag_system():
-    """Lazy-load PDF RAG system on first use (or return preloaded instance)"""
+    """Lazy-load PDF RAG system on first use."""
     global _pdf_rag_system_instance
     _ensure_rag()
     if _pdf_rag_system_instance is None and PDF_RAG_ENABLED:
         try:
             print("[backend] Loading PDF RAG system...")
-            DualSourceRAG = _crewai_modules.get("DualSourceRAG")
+            DualSourceRAG = _lazy_modules.get("DualSourceRAG")
             if DualSourceRAG:
                 _pdf_rag_system_instance = DualSourceRAG()
                 print("[backend] PDF RAG system ready!")
@@ -150,85 +153,60 @@ def get_pdf_rag_system():
             print(f"[backend] Warning: Could not initialize PDF RAG system: {e}")
             _pdf_rag_system_instance = None
     return _pdf_rag_system_instance
-# ============================================
-# CrewAI Agent Definitions
-# ============================================
-
-def create_finance_agent():
-    """Create a finance career advisor agent"""
-    _ensure_crewai()
-    Agent = _crewai_modules["Agent"]
-    return Agent(
-        role="Finance Career Advisor",
-        goal="Design a realistic and inspiring finance career path for this candidate",
-        backstory=(
-            "You are a senior finance professional and career mentor with 15+ years of experience. "
-            "You understand roles such as investment banking, equity research, FP&A, fintech, "
-            "and quantitative analysis. You focus on clarity and practicality while being encouraging."
-        ),
-        llm=LLM_MODEL,
-        verbose=False,
-        allow_delegation=False
-    )
-
-
-def create_healthcare_agent():
-    """Create a healthcare data & technology career advisor agent"""
-    Agent = _crewai_modules["Agent"]
-    return Agent(
-        role="Healthcare Data & Technology Career Advisor",
-        goal="Map out how this candidate could impact healthcare using data, software, and AI",
-        backstory=(
-            "You are an expert in healthcare, digital health, bioinformatics, and medical AI. "
-            "You help technical students see how their skills can translate into roles at "
-            "hospitals, health-tech startups, research labs, and public health organizations."
-        ),
-        llm=LLM_MODEL,
-        verbose=False,
-        allow_delegation=False
-    )
-
-
-def create_consultant_agent():
-    """Create a strategy & technology consultant career advisor agent"""
-    Agent = _crewai_modules["Agent"]
-    return Agent(
-        role="Strategy & Technology Consultant Career Advisor",
-        goal="Explain how this candidate could become a consultant using their CS and analytical skills",
-        backstory=(
-            "You are a senior management consultant with experience in MBB-style firms and tech consulting. "
-            "You specialize in helping students understand consulting work, cases, and long-term growth."
-        ),
-        llm=LLM_MODEL,
-        verbose=False,
-        allow_delegation=False
-    )
 
 
 # ============================================
-# CrewAI Execution Logic
+# Agent System Prompts
+# ============================================
+
+AGENT_SYSTEM_PROMPTS = {
+    "finance": (
+        "You are a senior finance career advisor with 15+ years of experience. "
+        "You understand roles such as investment banking, equity research, FP&A, fintech, "
+        "and quantitative analysis. You are mentoring a computer science student who wants "
+        "to explore a career in finance. Be clear, practical, and encouraging. "
+        "Use short paragraphs and bullet points. Cite real-world examples when available."
+    ),
+    "healthcare": (
+        "You are an expert in healthcare technology, digital health, bioinformatics, and medical AI. "
+        "You help technical students see how their skills translate into roles at hospitals, "
+        "health-tech startups, research labs, and public health organizations. "
+        "You are mentoring a computer science student who wants to explore healthcare tech. "
+        "Be specific about roles, tools, and career paths. Use short paragraphs and bullet points."
+    ),
+    "consultant": (
+        "You are a senior management consultant with experience in MBB-style firms and tech consulting. "
+        "You specialize in helping students understand consulting work, case interviews, and long-term growth. "
+        "You are mentoring a computer science student who wants to explore strategy and technology consulting. "
+        "Be realistic about the work, specific about skills needed, and encouraging about their potential."
+    ),
+}
+
+DOMAIN_NAMES = {
+    "finance": "finance",
+    "healthcare": "healthcare and health-tech",
+    "consultant": "strategy and technology consulting",
+}
+
+
+# ============================================
+# Agent Execution Logic (LangChain)
 # ============================================
 
 def run_agent_summary(agent_type: str, profile: str) -> str:
     """
-    Uses CrewAI to generate a 'future you' career story for the candidate.
+    Uses LangChain ChatAnthropic to generate a 'future you' career story.
     """
-    if not _ensure_crewai():
-        raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
-    Task = _crewai_modules["Task"]
-    Crew = _crewai_modules["Crew"]
-    
-    # Select the appropriate agent
-    if agent_type == "finance":
-        agent = create_finance_agent()
-        domain = "finance"
-    elif agent_type == "healthcare":
-        agent = create_healthcare_agent()
-        domain = "healthcare and health-tech"
-    elif agent_type == "consultant":
-        agent = create_consultant_agent()
-        domain = "strategy and technology consulting"
-    else:
+    llm = get_llm()
+    if llm is None:
+        raise ValueError("LangChain is not available. Please install: pip install langchain-anthropic")
+
+    SystemMessage = _lazy_modules["SystemMessage"]
+    HumanMessage = _lazy_modules["HumanMessage"]
+
+    system_prompt = AGENT_SYSTEM_PROMPTS.get(agent_type)
+    domain = DOMAIN_NAMES.get(agent_type)
+    if not system_prompt:
         raise ValueError(f"Unknown agent type: {agent_type}")
 
     # Get RAG context if available
@@ -245,62 +223,45 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
                 rag_context = f"\n\nREAL-WORLD JOB EXAMPLES:\n{rag_context}\n"
         except Exception as e:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
-            rag_context = ""
 
-    # Create the task
-    task = Task(
-        description=f"""
-        Analyze this candidate profile and create a detailed 'future you' career story in {domain}.
+    user_prompt = f"""Analyze this candidate profile and create a detailed 'future you' career story in {domain}.
 
-        Candidate Profile:
-        {profile}
-        {rag_context}
+Candidate Profile:
+{profile}
+{rag_context}
 
-        Your response MUST include:
-        1. 2-3 possible job titles they might hold in 3-5 years (cite specific examples from the job examples if available)
-        2. The kind of companies or teams they might work with (reference actual companies from examples)
-        3. What a typical week looks like (base on real responsibilities from job examples)
-        4. The main skills and tools they would lean on from their current background
-        5. 3-5 specific skill-building steps they should focus on next (courses, projects, internships, etc.)
+Your response MUST include:
+1. 2-3 possible job titles they might hold in 3-5 years (cite specific examples from job examples if available)
+2. The kind of companies or teams they might work with (reference actual companies from examples)
+3. What a typical week looks like (base on real responsibilities from job examples)
+4. The main skills and tools they would lean on from their current background
+5. 3-5 specific skill-building steps they should focus on next (courses, projects, internships, etc.)
 
-        Use short paragraphs and bullet points. Keep the tone realistic but encouraging.
-        When citing examples, mention the source (e.g., "At companies like X..." or "Similar to roles at Y...")
-        """,
-        expected_output="A structured, readable career story with specific job titles, company types, weekly activities, relevant skills, and an actionable development plan, citing real-world examples where applicable",
-        agent=agent
-    )
+Use short paragraphs and bullet points. Keep the tone realistic but encouraging.
+When citing examples, mention the source (e.g., "At companies like X..." or "Similar to roles at Y...")."""
 
-    # Create and run the crew
-    crew = Crew(
-        agents=[agent],
-        tasks=[task],
-        verbose=False
-    )
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ])
 
-    result = crew.kickoff()
-    return str(result)
+    return response.content
 
 
 def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
     """
-    Uses CrewAI agent to answer follow-up questions about the career path.
+    Uses LangChain ChatAnthropic to answer follow-up questions about the career path.
     """
-    if not _ensure_crewai():
-        raise ValueError("CrewAI is not available. Please install it with: pip install crewai")
-    Task = _crewai_modules["Task"]
-    Crew = _crewai_modules["Crew"]
-    
-    # Select the appropriate agent
-    if agent_type == "finance":
-        agent = create_finance_agent()
-        domain = "finance"
-    elif agent_type == "healthcare":
-        agent = create_healthcare_agent()
-        domain = "healthcare and health-tech"
-    elif agent_type == "consultant":
-        agent = create_consultant_agent()
-        domain = "strategy and technology consulting"
-    else:
+    llm = get_llm()
+    if llm is None:
+        raise ValueError("LangChain is not available. Please install: pip install langchain-anthropic")
+
+    SystemMessage = _lazy_modules["SystemMessage"]
+    HumanMessage = _lazy_modules["HumanMessage"]
+
+    system_prompt = AGENT_SYSTEM_PROMPTS.get(agent_type)
+    domain = DOMAIN_NAMES.get(agent_type)
+    if not system_prompt:
         raise ValueError(f"Unknown agent type: {agent_type}")
 
     # Get RAG context if available
@@ -308,7 +269,6 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
     rag_system = get_rag_system()
     if rag_system:
         try:
-            # Use the question for more relevant context retrieval
             rag_context = rag_system.get_context_for_agent(
                 career_path=agent_type,
                 user_profile=f"{profile}\nQuestion: {question}",
@@ -318,37 +278,82 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
                 rag_context = f"\n\nREAL-WORLD EXAMPLES:\n{rag_context}\n"
         except Exception as e:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
-            rag_context = ""
 
-    # Create the chat task
-    task = Task(
-        description=f"""
-        You are mentoring a candidate in {domain}.
+    user_prompt = f"""You are mentoring a candidate in {domain}.
 
-        Candidate Profile:
-        {profile}
-        {rag_context}
+Candidate Profile:
+{profile}
+{rag_context}
 
-        The candidate is asking a follow-up question. Answer with clear, plain language,
-        concrete examples from the {domain} context, and use short paragraphs or bullet points.
-        If relevant examples are provided above, cite them in your answer.
+The candidate is asking a follow-up question. Answer with clear, plain language,
+concrete examples from {domain}, and use short paragraphs or bullet points.
+If relevant examples are provided above, cite them in your answer.
 
-        Question:
-        {question}
-        """,
-        expected_output="A clear, helpful answer with concrete examples and actionable advice, citing real-world examples when relevant",
-        agent=agent
+Question:
+{question}"""
+
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ])
+
+    return response.content
+
+
+def run_career_path_agent(context: str, target_role: str) -> str:
+    """
+    Uses LangChain ChatAnthropic to generate a career path plan from dual-source RAG context.
+    """
+    llm = get_llm()
+    if llm is None:
+        raise ValueError("LangChain is not available. Please install: pip install langchain-anthropic")
+
+    SystemMessage = _lazy_modules["SystemMessage"]
+    HumanMessage = _lazy_modules["HumanMessage"]
+
+    system_prompt = (
+        "You are an expert career strategist who analyzes candidate backgrounds "
+        "and company requirements to create actionable career development plans. "
+        "You excel at identifying skill gaps and creating practical learning paths. "
+        "Be specific, practical, and actionable. Reference actual tools, courses, or projects."
     )
 
-    # Create and run the crew
-    crew = Crew(
-        agents=[agent],
-        tasks=[task],
-        verbose=False
-    )
+    user_prompt = f"""Create a personalized career path plan for this target role: {target_role}
 
-    result = crew.kickoff()
-    return str(result)
+CONTEXT (from uploaded documents):
+{context}
+
+Your response MUST include:
+1. SKILLS MATCH: List 3-5 skills/experiences from the resume that align with company needs
+2. GAP ANALYSIS: Identify 3-5 specific gaps between current skills and role requirements
+3. LEARNING PATH: Provide 5-7 concrete, actionable steps to bridge the gaps:
+   - Specific courses, certifications, or learning resources
+   - Hands-on projects to build
+   - Timeline estimates (e.g., "2-3 months")
+   - Which skills each step develops
+
+Format your response clearly with sections:
+## Skills Match
+- [skill 1]
+- [skill 2]
+...
+
+## Gaps to Address
+- [gap 1]
+- [gap 2]
+...
+
+## Learning Path
+1. [Step 1] (Timeline: X months) - Develops: [skills]
+2. [Step 2] ...
+..."""
+
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ])
+
+    return response.content
 
 
 # ============================================
@@ -373,32 +378,30 @@ class ChatResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
-    # Startup
     print("=" * 50)
     print("Yuto Portfolio AI Backend started successfully!")
-    print(f"   LLM Provider: {LLM_PROVIDER} ({LLM_MODEL})")
-    print(f"   CrewAI: lazy-loaded on first request")
+    print(f"   Model: {LLM_MODEL}")
+    print(f"   LangChain: lazy-loaded on first request")
     print(f"   RAG disabled: {RAG_DISABLED}")
     print("=" * 50)
     yield
-    # Shutdown (if needed)
     print("Shutting down Yuto Portfolio AI Backend...")
 
 
-app = FastAPI(title="Yuto Portfolio AI Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Yuto Portfolio AI Backend", version="0.2.0", lifespan=lifespan)
 
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # Frontend static files directory (one level up from backend/)
 FRONTEND_DIR = Path(__file__).parent.parent
+
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
@@ -408,22 +411,16 @@ def health():
 
 @app.post("/api/agent", response_model=SummaryResponse | ChatResponse)
 def agent_endpoint(payload: AgentRequest):
-    if not _ensure_crewai():
+    if not _ensure_langchain():
         raise HTTPException(
             status_code=503,
-            detail="CrewAI is not available. Please install it with: pip install crewai litellm",
+            detail="LangChain is not available. Please install: pip install langchain-anthropic",
         )
-    
-    # Check if the API key for the selected provider is configured
-    if LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
+
+    if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=500,
             detail="ANTHROPIC_API_KEY is not configured on the server.",
-        )
-    elif LLM_PROVIDER == "deepseek" and not DEEPSEEK_API_KEY:
-        raise HTTPException(
-            status_code=500,
-            detail="DEEPSEEK_API_KEY is not configured on the server.",
         )
 
     try:
@@ -440,7 +437,7 @@ def agent_endpoint(payload: AgentRequest):
         raise HTTPException(status_code=400, detail="Unsupported mode.")
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print("[backend] Unhandled error:", exc)
         import traceback
         traceback.print_exc()
@@ -457,17 +454,7 @@ async def upload_pdf(
     source_type: Literal["resume", "company_pdf", "project_pdf"] = Form(...),
     company: Optional[str] = Form(None)
 ):
-    """
-    Upload and index a PDF file.
-
-    Args:
-        file: PDF file to upload
-        source_type: Type of document (resume, company_pdf, project_pdf)
-        company: Optional company name (for company/project PDFs)
-
-    Returns:
-        Indexing result
-    """
+    """Upload and index a PDF file."""
     print(f"[backend] Upload request received: {file.filename}, type: {source_type}, company: {company}")
 
     pdf_rag_system = get_pdf_rag_system()
@@ -477,32 +464,19 @@ async def upload_pdf(
             detail="PDF RAG system is not available. Install dependencies: pip install pypdf python-multipart"
         )
 
-    # Validate file type
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
-        # Create uploads directory
         uploads_dir = Path(__file__).parent / "data" / "uploads"
         uploads_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[backend] Uploads directory: {uploads_dir}")
 
-        # Save uploaded file
         file_path = uploads_dir / file.filename
-        print(f"[backend] Saving file to: {file_path}")
-
-        # Read file content into memory first
         content = await file.read()
-        print(f"[backend] File size: {len(content)} bytes")
 
-        # Write to disk
         with open(file_path, "wb") as buffer:
             buffer.write(content)
 
-        print(f"[backend] File saved successfully")
-
-        # Index the PDF
-        print(f"[backend] Indexing PDF...")
         result = pdf_rag_system.index_pdf(
             pdf_path=file_path,
             source_type=source_type,
@@ -510,7 +484,6 @@ async def upload_pdf(
         )
 
         if "error" in result:
-            print(f"[backend] Indexing error: {result['error']}")
             raise HTTPException(status_code=400, detail=result["error"])
 
         print(f"[backend] Successfully indexed {file.filename}")
@@ -531,58 +504,31 @@ async def upload_pdf(
 
 @app.get("/api/list-documents")
 async def list_documents():
-    """
-    List all indexed PDF documents.
-
-    Returns:
-        Documents grouped by source type
-    """
+    """List all indexed PDF documents."""
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
-        raise HTTPException(
-            status_code=500,
-            detail="PDF RAG system is not available"
-        )
+        raise HTTPException(status_code=500, detail="PDF RAG system is not available")
 
     try:
         documents = pdf_rag_system.list_indexed_documents()
-        return {
-            "success": True,
-            "documents": documents
-        }
+        return {"success": True, "documents": documents}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing documents: {str(e)}")
 
 
 @app.delete("/api/delete-document/{doc_id}")
 async def delete_document(doc_id: str):
-    """
-    Delete a document by its ID.
-
-    Args:
-        doc_id: Document ID to delete
-
-    Returns:
-        Deletion result
-    """
+    """Delete a document by its ID."""
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
-        raise HTTPException(
-            status_code=500,
-            detail="PDF RAG system is not available"
-        )
+        raise HTTPException(status_code=500, detail="PDF RAG system is not available")
 
     try:
         success = pdf_rag_system.delete_document(doc_id)
-
         if success:
-            return {
-                "success": True,
-                "message": f"Document {doc_id} deleted successfully"
-            }
+            return {"success": True, "message": f"Document {doc_id} deleted successfully"}
         else:
             raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
-
     except HTTPException:
         raise
     except Exception as e:
@@ -603,34 +549,18 @@ class CareerPathResponse(BaseModel):
 
 @app.post("/api/career-path", response_model=CareerPathResponse)
 async def generate_career_path(payload: CareerPathRequest):
-    """
-    Generate a personalized career path by matching resume with company needs.
-
-    Args:
-        target_role: Target role (e.g., "Data Scientist at Stripe")
-        company: Optional company name for filtering
-
-    Returns:
-        Personalized career path with gap analysis and learning steps
-    """
-    if not _ensure_crewai():
+    """Generate a personalized career path by matching resume with company needs."""
+    if not _ensure_langchain():
         raise HTTPException(
             status_code=503,
-            detail="CrewAI is not available. Please install it with: pip install crewai litellm",
+            detail="LangChain is not available. Please install: pip install langchain-anthropic",
         )
-    Agent = _crewai_modules["Agent"]
-    Task = _crewai_modules["Task"]
-    Crew = _crewai_modules["Crew"]
 
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
-        raise HTTPException(
-            status_code=500,
-            detail="PDF RAG system is not available"
-        )
+        raise HTTPException(status_code=500, detail="PDF RAG system is not available")
 
     try:
-        # Get dual-source context
         context = pdf_rag_system.get_career_path_context(
             target_role=payload.target_role,
             company=payload.company,
@@ -644,74 +574,13 @@ async def generate_career_path(payload: CareerPathRequest):
                 detail="No resume or company documents found. Please upload PDFs first."
             )
 
-        # Create career path planning agent
-        agent = Agent(
-            role="Career Path Strategist",
-            goal="Create personalized career development plans matching candidate skills to company needs",
-            backstory=(
-                "You are an expert career strategist who analyzes candidate backgrounds "
-                "and company requirements to create actionable career development plans. "
-                "You excel at identifying skill gaps and creating practical learning paths."
-            ),
-            llm=LLM_MODEL,
-            verbose=False,
-            allow_delegation=False
-        )
+        result = run_career_path_agent(context, payload.target_role)
 
-        # Create the task
-        task = Task(
-            description=f"""
-            Create a personalized career path plan for this target role: {payload.target_role}
-
-            CONTEXT (from uploaded documents):
-            {context}
-
-            Your response MUST include:
-            1. SKILLS MATCH: List 3-5 skills/experiences from the resume that align with company needs
-            2. GAP ANALYSIS: Identify 3-5 specific gaps between current skills and role requirements
-            3. LEARNING PATH: Provide 5-7 concrete, actionable steps to bridge the gaps:
-               - Specific courses, certifications, or learning resources
-               - Hands-on projects to build
-               - Timeline estimates (e.g., "2-3 months")
-               - Which skills each step develops
-
-            Format your response clearly with sections:
-            ## Skills Match
-            - [skill 1]
-            - [skill 2]
-            ...
-
-            ## Gaps to Address
-            - [gap 1]
-            - [gap 2]
-            ...
-
-            ## Learning Path
-            1. [Step 1] (Timeline: X months) - Develops: [skills]
-            2. [Step 2] ...
-            ...
-
-            Be specific, practical, and actionable. Reference actual tools, courses, or projects mentioned in the documents.
-            """,
-            expected_output="A structured career path plan with skills match, gap analysis, and detailed learning steps",
-            agent=agent
-        )
-
-        # Run the crew
-        crew = Crew(
-            agents=[agent],
-            tasks=[task],
-            verbose=False
-        )
-
-        result = str(crew.kickoff())
-
-        # Parse the result (simple version - you can make this more sophisticated)
         return CareerPathResponse(
             career_path=result,
-            skills_match=["Extracted from result"],  # TODO: Parse from result
-            gaps=["Extracted from result"],  # TODO: Parse from result
-            learning_steps=["Extracted from result"]  # TODO: Parse from result
+            skills_match=["Extracted from result"],
+            gaps=["Extracted from result"],
+            learning_steps=["Extracted from result"]
         )
 
     except HTTPException:
@@ -725,8 +594,7 @@ async def generate_career_path(payload: CareerPathRequest):
 
 # ============================================
 # Static Frontend Serving
-# Serve index.html, style.css, script.js, assets/
-# Must be AFTER all API routes to avoid overriding them.
+# Must be AFTER all API routes.
 # ============================================
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -737,33 +605,29 @@ def serve_index():
         return FileResponse(index_path)
     return {"status": "ok", "message": "Yuto Portfolio AI Backend is running"}
 
+
 @app.get("/resume.html")
 def serve_resume():
     """Serve resume page"""
     return FileResponse(FRONTEND_DIR / "resume.html")
 
-# Serve static assets (images, PDFs, etc.)
+
 if (FRONTEND_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
-# Serve root-level static files (style.css, script.js)
+
 @app.get("/{filename:path}")
 def serve_static(filename: str):
     """Catch-all: serve static files from the frontend directory"""
     file_path = FRONTEND_DIR / filename
     if file_path.is_file() and file_path.suffix in {".css", ".js", ".html", ".png", ".jpg", ".ico", ".svg", ".pdf"}:
         return FileResponse(file_path)
-    # Fall back to index.html for SPA-style routing
     index_path = FRONTEND_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
     raise HTTPException(status_code=404, detail="Not found")
 
 
-# Convenience for local dev:
-#   cd backend
-#   uvicorn app:app --reload --port 8000
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

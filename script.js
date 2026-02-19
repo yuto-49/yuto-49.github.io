@@ -183,7 +183,7 @@ if (document.readyState === 'loading') {
 }
 
 // ============================================
-// AI Career Agents (Crew AI + Claude backend hook)
+// AI Career Agents (LangChain + Claude backend)
 // ============================================
 
 const AI_BACKEND_URL = '/api/agent';
@@ -265,7 +265,7 @@ if (aiSection) {
     } catch (err) {
       console.error('AI summary error:', err);
       summaryEl.textContent =
-        'Could not reach your AI backend. Once you connect a Crew AI + Claude endpoint, this will generate a tailored career story.';
+        'Could not reach your AI backend. Once you connect a LangChain + Claude endpoint, this will generate a tailored career story.';
       setStatus('Unable to reach AI backend. Check AI_BACKEND_URL and your server.', true);
     }
   }
@@ -305,7 +305,7 @@ if (aiSection) {
       console.error('AI chat error:', err);
       appendMessage(
         'agent',
-        'I could not contact the AI backend. Once you deploy your Crew AI + Claude server, I can answer your questions here.'
+        'I could not contact the AI backend. Once you deploy your LangChain + Claude server, I can answer your questions here.'
       );
       setStatus('Unable to reach AI backend. Check AI_BACKEND_URL and your server.', true);
     } finally {

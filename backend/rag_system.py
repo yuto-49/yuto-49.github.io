@@ -220,7 +220,7 @@ class CareerRAG:
         top_k: int = 3
     ) -> str:
         """
-        Get formatted context for a CrewAI agent.
+        Get formatted context for an LLM agent.
 
         Args:
             career_path: Career path
