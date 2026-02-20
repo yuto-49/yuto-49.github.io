@@ -25,8 +25,8 @@ def main():
         print("   backend/data/company_examples/*.jsonl")
 
     # Step 2: Index data
-    print("\n🗄️  Step 2: Indexing data with ChromaDB...")
-    print("   This creates vector embeddings for semantic search.")
+    print("\n🗄️  Step 2: Building BM25 index...")
+    print("   This creates a BM25 keyword index for search.")
 
     try:
         from rag_system import CareerRAG

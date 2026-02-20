@@ -488,7 +488,12 @@ async function loadDocuments() {
 
   try {
     const response = await fetch(`${API_BASE}/list-documents`);
-    const result = await response.json();
+    const text = await response.text();
+    if (!text) {
+      documentsList.innerHTML = '<p class="documents-empty">No documents uploaded yet</p>';
+      return;
+    }
+    const result = JSON.parse(text);
 
     if (response.ok && result.success) {
       displayDocuments(result.documents);
@@ -496,7 +501,7 @@ async function loadDocuments() {
       documentsList.innerHTML = '<p class="documents-empty">Error loading documents</p>';
     }
   } catch (error) {
-    documentsList.innerHTML = `<p class="documents-empty">Error: ${error.message}</p>`;
+    documentsList.innerHTML = '<p class="documents-empty">No documents uploaded yet</p>';
   }
 }
 

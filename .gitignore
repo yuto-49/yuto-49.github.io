@@ -20,6 +20,8 @@ ENV/
 
 # Backend data
 backend/data/uploads/
-backend/data/chromadb/
+backend/data/chroma_db/
+backend/data/dual_source_chroma/
+backend/data/bm25_pdf_index/
 *.db
 *.sqlite

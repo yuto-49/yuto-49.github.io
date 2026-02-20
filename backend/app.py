@@ -20,7 +20,6 @@ load_dotenv()
 # ============================================
 
 LANGCHAIN_AVAILABLE = None  # None = not yet checked
-RAG_DISABLED = os.getenv("DISABLE_RAG", "false").lower() == "true"
 RAG_ENABLED = None
 PDF_RAG_ENABLED = None
 
@@ -50,11 +49,6 @@ def _ensure_rag():
     """Lazy-load RAG systems on first use."""
     global RAG_ENABLED, PDF_RAG_ENABLED
     if RAG_ENABLED is not None:
-        return
-    if RAG_DISABLED:
-        print("[backend] RAG systems disabled via DISABLE_RAG=true (saves ~500MB memory)")
-        RAG_ENABLED = False
-        PDF_RAG_ENABLED = False
         return
     try:
         from rag_system import CareerRAG
@@ -382,7 +376,7 @@ async def lifespan(_app: FastAPI):
     print("Yuto Portfolio AI Backend started successfully!")
     print(f"   Model: {LLM_MODEL}")
     print(f"   LangChain: lazy-loaded on first request")
-    print(f"   RAG disabled: {RAG_DISABLED}")
+    print(f"   RAG: lazy-loaded on first request (BM25)")
     print("=" * 50)
     yield
     print("Shutting down Yuto Portfolio AI Backend...")
@@ -507,7 +501,7 @@ async def list_documents():
     """List all indexed PDF documents."""
     pdf_rag_system = get_pdf_rag_system()
     if not pdf_rag_system:
-        raise HTTPException(status_code=500, detail="PDF RAG system is not available")
+        return {"success": True, "documents": {"resume": [], "company_pdf": [], "project_pdf": []}}
 
     try:
         documents = pdf_rag_system.list_indexed_documents()

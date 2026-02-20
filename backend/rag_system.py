@@ -1,14 +1,13 @@
 """
 RAG System for Career Agents
-Uses ChromaDB with built-in ONNX embeddings for semantic search over job examples.
+Uses a lightweight BM25 keyword index (pure Python, no external deps).
 """
 
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
-import chromadb
-from chromadb.config import Settings
+from bm25_engine import BM25Index
 
 
 # ============================================
@@ -23,138 +22,100 @@ class CareerRAG:
     def __init__(
         self,
         data_dir: Path = None,
-        chroma_dir: Path = None,
+        index_dir: Path = None,
     ):
-        """
-        Initialize the RAG system.
-
-        Args:
-            data_dir: Directory containing JSONL files with career examples
-            chroma_dir: Directory for ChromaDB persistent storage
-        """
         if data_dir is None:
             data_dir = Path(__file__).parent / "data" / "company_examples"
 
-        if chroma_dir is None:
-            chroma_dir = Path(__file__).parent / "data" / "chroma_db"
+        if index_dir is None:
+            index_dir = Path(__file__).parent / "data" / "bm25_index"
 
         self.data_dir = Path(data_dir)
-        self.chroma_dir = Path(chroma_dir)
-        self.chroma_dir.mkdir(parents=True, exist_ok=True)
+        self.index_dir = Path(index_dir)
+        self.index_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize ChromaDB (uses built-in ONNX embeddings — no PyTorch needed)
-        print(f"[RAG] Initializing ChromaDB at: {self.chroma_dir}")
-        self.client = chromadb.PersistentClient(
-            path=str(self.chroma_dir),
-            settings=Settings(anonymized_telemetry=False)
-        )
+        print(f"[RAG] Initializing BM25 indexes at: {self.index_dir}")
 
-        # Create collections for each career path
-        self.collections = {}
+        # One BM25Index per career path
+        self.indexes: Dict[str, BM25Index] = {}
         for career_path in ["finance", "healthcare", "consultant"]:
-            self.collections[career_path] = self.client.get_or_create_collection(
-                name=f"{career_path}_examples",
-                metadata={"description": f"Job examples for {career_path} career path"}
+            self.indexes[career_path] = BM25Index(
+                self.index_dir / f"{career_path}_index.json"
             )
 
     def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """
-        Split text into overlapping chunks for better retrieval.
-        """
+        """Split text into overlapping chunks for better retrieval."""
         words = text.split()
         chunks = []
-
         for i in range(0, len(words), chunk_size - overlap):
             chunk = " ".join(words[i:i + chunk_size])
             if chunk.strip():
                 chunks.append(chunk)
-
         return chunks
 
     def index_career_path(self, career_path: str) -> int:
-        """
-        Index all examples for a specific career path.
-
-        Returns:
-            Number of documents indexed
-        """
+        """Index all examples for a specific career path."""
         jsonl_file = self.data_dir / f"{career_path}.jsonl"
 
         if not jsonl_file.exists():
-            print(f"⚠️  Warning: No data file found for {career_path} at {jsonl_file}")
+            print(f"Warning: No data file found for {career_path} at {jsonl_file}")
             return 0
 
-        print(f"\n📚 Indexing {career_path} examples from {jsonl_file}")
+        print(f"\nIndexing {career_path} examples from {jsonl_file}")
 
-        collection = self.collections[career_path]
+        index = self.indexes[career_path]
         documents = []
         metadatas = []
         ids = []
 
-        doc_id = 0
-
-        with open(jsonl_file, 'r', encoding='utf-8') as f:
+        with open(jsonl_file, "r", encoding="utf-8") as f:
             for line_num, line in enumerate(f, 1):
                 try:
                     example = json.loads(line)
-
-                    # Chunk the text
-                    chunks = self._chunk_text(example['text'])
+                    chunks = self._chunk_text(example["text"])
 
                     for chunk_idx, chunk in enumerate(chunks):
                         documents.append(chunk)
                         metadatas.append({
-                            "url": example['url'],
-                            "title": example.get('title', 'Unknown'),
-                            "author": example.get('author', ''),
-                            "date": example.get('date', ''),
+                            "url": example["url"],
+                            "title": example.get("title", "Unknown"),
+                            "author": example.get("author", ""),
+                            "date": example.get("date", ""),
                             "chunk_idx": chunk_idx,
-                            "total_chunks": len(chunks)
+                            "total_chunks": len(chunks),
                         })
                         ids.append(f"{career_path}_{line_num}_{chunk_idx}")
-                        doc_id += 1
 
                 except json.JSONDecodeError as e:
-                    print(f"   ✗ Error parsing line {line_num}: {e}")
+                    print(f"   Error parsing line {line_num}: {e}")
                     continue
 
         if documents:
-            # Add to ChromaDB
-            collection.add(
-                documents=documents,
-                metadatas=metadatas,
-                ids=ids
-            )
-
-            print(f"   ✓ Indexed {len(documents)} chunks from {jsonl_file}")
+            index.add_documents(documents=documents, metadatas=metadatas, ids=ids)
+            print(f"   Indexed {len(documents)} chunks from {jsonl_file}")
         else:
-            print(f"   ⚠️  No documents found in {jsonl_file}")
+            print(f"   Warning: No documents found in {jsonl_file}")
 
         return len(documents)
 
     def index_all(self) -> Dict[str, int]:
-        """
-        Index all career paths.
-
-        Returns:
-            Dictionary mapping career_path -> number of chunks indexed
-        """
-        print("\n" + "="*60)
-        print("🚀 Starting RAG Indexing")
-        print("="*60)
+        """Index all career paths."""
+        print("\n" + "=" * 60)
+        print("Starting RAG Indexing (BM25)")
+        print("=" * 60)
 
         results = {}
         for career_path in ["finance", "healthcare", "consultant"]:
             count = self.index_career_path(career_path)
             results[career_path] = count
 
-        print("\n" + "="*60)
-        print("✅ Indexing Complete!")
-        print("="*60)
+        print("\n" + "=" * 60)
+        print("Indexing Complete!")
+        print("=" * 60)
         print(f"   Finance: {results.get('finance', 0)} chunks")
         print(f"   Healthcare: {results.get('healthcare', 0)} chunks")
         print(f"   Consultant: {results.get('consultant', 0)} chunks")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
         return results
 
@@ -162,47 +123,26 @@ class CareerRAG:
         self,
         career_path: str,
         query: str,
-        top_k: int = 5
+        top_k: int = 5,
     ) -> List[Dict[str, Any]]:
-        """
-        Search for relevant examples for a given career path and query.
-
-        Args:
-            career_path: One of "finance", "healthcare", "consultant"
-            query: Search query (e.g., user's skills and interests)
-            top_k: Number of results to return
-
-        Returns:
-            List of relevant examples with metadata
-        """
-        if career_path not in self.collections:
-            print(f"⚠️  Unknown career path: {career_path}")
+        """Search for relevant examples for a given career path and query."""
+        if career_path not in self.indexes:
+            print(f"Warning: Unknown career path: {career_path}")
             return []
 
-        collection = self.collections[career_path]
+        index = self.indexes[career_path]
+        results = index.search(query=query, top_k=top_k)
 
-        # Search
-        results = collection.query(
-            query_texts=[query],
-            n_results=top_k
-        )
-
-        # Format results
         formatted_results = []
-        if results['documents'] and results['documents'][0]:
-            for idx, (doc, metadata, distance) in enumerate(zip(
-                results['documents'][0],
-                results['metadatas'][0],
-                results['distances'][0]
-            )):
-                formatted_results.append({
-                    "rank": idx + 1,
-                    "text": doc,
-                    "url": metadata.get('url', ''),
-                    "title": metadata.get('title', ''),
-                    "relevance_score": 1 - distance,  # Convert distance to similarity
-                    "metadata": metadata
-                })
+        for idx, r in enumerate(results):
+            formatted_results.append({
+                "rank": idx + 1,
+                "text": r["text"],
+                "url": r["metadata"].get("url", ""),
+                "title": r["metadata"].get("title", ""),
+                "relevance_score": r["score"],
+                "metadata": r["metadata"],
+            })
 
         return formatted_results
 
@@ -210,29 +150,18 @@ class CareerRAG:
         self,
         career_path: str,
         user_profile: str,
-        top_k: int = 3
+        top_k: int = 3,
     ) -> str:
-        """
-        Get formatted context for an LLM agent.
-
-        Args:
-            career_path: Career path
-            user_profile: User's profile/resume text
-            top_k: Number of examples to retrieve
-
-        Returns:
-            Formatted context string
-        """
+        """Get formatted context for an LLM agent."""
         results = self.search(career_path, user_profile, top_k)
 
         if not results:
             return ""
 
         context_parts = ["Here are some relevant real-world job examples:\n"]
-
         for result in results:
             context_parts.append(f"\n--- Example {result['rank']} (from {result['title']}) ---")
-            context_parts.append(result['text'])
+            context_parts.append(result["text"])
             context_parts.append(f"Source: {result['url']}\n")
 
         return "\n".join(context_parts)
@@ -243,17 +172,11 @@ class CareerRAG:
 # ============================================
 
 def main():
-    """
-    Build and index the RAG system.
-    """
+    """Build and index the RAG system."""
     rag = CareerRAG()
-
-    # Index all data
     rag.index_all()
 
-    # Test search
-    print("\n🧪 Testing search functionality...\n")
-
+    print("\nTesting search functionality...\n")
     test_query = "Python data analysis machine learning experience"
 
     for career_path in ["finance", "healthcare", "consultant"]:
