@@ -201,7 +201,7 @@ if (aiSection) {
   // Resume upload elements
   const resumeForm = document.getElementById('ai-resume-form');
   const resumeFileInput = document.getElementById('ai-resume-file');
-  const resumeFileLabel = document.getElementById('ai-file-label');
+  const resumeDropzone = document.getElementById('ai-file-dropzone');
   const resumeFileName = document.getElementById('ai-file-name');
   const resumeUploadBtn = document.getElementById('ai-upload-btn');
   const resumeStatusEl = document.getElementById('ai-resume-status');
@@ -229,12 +229,32 @@ if (aiSection) {
       const file = resumeFileInput.files[0];
       if (file) {
         resumeFileName.textContent = file.name;
-        resumeFileLabel.classList.add('has-file');
+        if (resumeDropzone) resumeDropzone.classList.add('has-file');
         resumeUploadBtn.disabled = false;
       } else {
-        resumeFileName.textContent = 'Choose a PDF file';
-        resumeFileLabel.classList.remove('has-file');
+        resumeFileName.textContent = 'Drag & drop your PDF here, or click to browse';
+        if (resumeDropzone) resumeDropzone.classList.remove('has-file');
         resumeUploadBtn.disabled = true;
+      }
+    });
+  }
+
+  // Drag-and-drop support
+  if (resumeDropzone) {
+    resumeDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      resumeDropzone.classList.add('dragover');
+    });
+    resumeDropzone.addEventListener('dragleave', () => {
+      resumeDropzone.classList.remove('dragover');
+    });
+    resumeDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      resumeDropzone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.toLowerCase().endsWith('.pdf')) {
+        resumeFileInput.files = e.dataTransfer.files;
+        resumeFileInput.dispatchEvent(new Event('change'));
       }
     });
   }

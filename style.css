@@ -662,35 +662,62 @@ body {
 
 .ai-resume-form {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 12px;
 }
 
-.ai-file-label {
+.ai-file-dropzone {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex: 1;
-  padding: 10px 16px;
+  padding: 28px 20px;
   background: var(--bg-primary);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  border: 2px dashed var(--border);
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  text-align: center;
+  color: var(--text-secondary);
 }
 
-.ai-file-label:hover {
+.ai-file-dropzone:hover,
+.ai-file-dropzone.dragover {
   border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.05);
   color: var(--accent);
 }
 
-.ai-file-label.has-file {
+.ai-file-dropzone.has-file {
   border-style: solid;
   border-color: var(--accent);
-  color: var(--text-primary);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.ai-file-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ai-file-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ai-file-hint {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.ai-file-dropzone.has-file .ai-file-hint {
+  display: none;
 }
 
 .ai-upload-btn {
@@ -1324,10 +1351,6 @@ body {
     flex-direction: column;
     gap: 12px;
     text-align: center;
-  }
-
-  .ai-resume-form {
-    flex-direction: column;
   }
 
   .ai-upload-btn {
