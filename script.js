@@ -217,7 +217,7 @@ if (aiSection) {
       `About: ${aboutText}`,
       skills.length ? `Skills: ${skills.join(', ')}` : '',
       projects.length ? `Projects: ${projects.join(' | ')}` : '',
-      'Resume file: assets/YUTO_MARUYAMA_RESUME_031925.pdf'
+      'Resume file: assets/Yuto_Maruyama_resume1.1.pdf'
     ].filter(Boolean).join('\n');
   }
 
