@@ -22,6 +22,7 @@ load_dotenv()
 LANGCHAIN_AVAILABLE = None  # None = not yet checked
 RAG_ENABLED = None
 PDF_RAG_ENABLED = None
+WEB_SEARCH_ENABLED = None  # None = not yet checked
 
 _lazy_modules = {}
 
@@ -64,6 +65,123 @@ def _ensure_rag():
     except ImportError:
         print("[backend] Warning: PDF RAG system not available.")
         PDF_RAG_ENABLED = False
+
+# ============================================
+# Tavily Web Search (Lazy Loading)
+# ============================================
+
+_web_search_client = None
+
+
+def _ensure_web_search():
+    """Lazy-check whether Tavily web search is available."""
+    global WEB_SEARCH_ENABLED
+    if WEB_SEARCH_ENABLED is not None:
+        return WEB_SEARCH_ENABLED
+    api_key = os.getenv("TAVILY_API_KEY", "").strip()
+    if not api_key:
+        print("[backend] Tavily API key not set — web search disabled.")
+        WEB_SEARCH_ENABLED = False
+        return False
+    try:
+        from tavily import TavilyClient  # noqa: F401
+        _lazy_modules["TavilyClient"] = TavilyClient
+        WEB_SEARCH_ENABLED = True
+        print("[backend] Tavily web search available.")
+    except ImportError:
+        print("[backend] Warning: tavily-python not installed — web search disabled.")
+        WEB_SEARCH_ENABLED = False
+    return WEB_SEARCH_ENABLED
+
+
+def get_web_search_client():
+    """Get or create the singleton TavilyClient."""
+    global _web_search_client
+    if _web_search_client is not None:
+        return _web_search_client
+    if not _ensure_web_search():
+        return None
+    TavilyClient = _lazy_modules["TavilyClient"]
+    _web_search_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY").strip())
+    print("[backend] Tavily client initialized.")
+    return _web_search_client
+
+
+# ============================================
+# Web Search Query Building & Execution
+# ============================================
+
+DOMAIN_SEARCH_TERMS = {
+    "finance": "finance investment banking fintech quantitative analyst FP&A",
+    "healthcare": "healthcare health-tech biotech digital health medical AI bioinformatics",
+    "consultant": "management consulting strategy consulting tech consulting MBB",
+}
+
+
+def _build_web_search_queries(profile: str, agent_type: str):
+    """Build 2 targeted search queries from the resume profile and agent type."""
+    domain_terms = DOMAIN_SEARCH_TERMS.get(agent_type, agent_type)
+    # Extract a handful of skill keywords from the first ~500 chars of the resume
+    skill_words = []
+    common_words = {
+        "the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "at",
+        "is", "was", "are", "on", "by", "from", "as", "it", "be", "this", "that",
+        "i", "my", "me", "we", "our", "have", "has", "had", "do", "did", "will",
+        "can", "may", "would", "should", "could", "not", "but", "if", "so", "no",
+        "all", "each", "any", "about", "up", "out", "new", "also", "than", "then",
+        "its", "his", "her", "their", "your", "more", "other", "into", "over",
+        "such", "after", "through", "between", "under", "during", "before",
+        "university", "education", "experience", "work", "school", "bachelor",
+        "master", "degree", "gpa", "resume", "name", "email", "phone", "address",
+    }
+    for word in profile[:500].split():
+        cleaned = word.strip(".,;:()[]{}!?\"'/-").lower()
+        if len(cleaned) > 2 and cleaned not in common_words and cleaned.isalpha():
+            skill_words.append(cleaned)
+        if len(skill_words) >= 8:
+            break
+    skills_str = " ".join(skill_words[:8])
+
+    query1 = f"{skills_str} career jobs {domain_terms} 2024 2025"
+    query2 = f"career transition into {domain_terms} skills needed career path"
+    return [query1, query2]
+
+
+def _fetch_web_context(profile: str, agent_type: str) -> str:
+    """Run Tavily searches and return formatted context string. Returns '' on failure."""
+    client = get_web_search_client()
+    if client is None:
+        return ""
+
+    queries = _build_web_search_queries(profile, agent_type)
+    seen_urls = set()
+    results = []
+
+    for q in queries:
+        try:
+            print(f"[backend] Tavily search: {q[:80]}...")
+            resp = client.search(query=q, search_depth="basic", max_results=3)
+            for item in resp.get("results", []):
+                url = item.get("url", "")
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                title = item.get("title", "")
+                content = item.get("content", "")[:500]
+                results.append({"title": title, "url": url, "content": content})
+                if len(results) >= 5:
+                    break
+        except Exception as e:
+            print(f"[backend] Tavily search error: {e}")
+    if not results:
+        return ""
+
+    lines = ["WEB SEARCH RESULTS (live):"]
+    for r in results:
+        lines.append(f"- [{r['title']}]({r['url']})")
+        lines.append(f"  {r['content']}")
+    return "\n".join(lines)
+
 
 # ============================================
 # Environment & LLM setup
@@ -222,12 +340,17 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
         except Exception as e:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
 
+    # Get live web search context if available
+    web_context = _fetch_web_context(profile, agent_type)
+    if web_context:
+        web_context = f"\n\n{web_context}\n"
+
     user_prompt = f"""Analyze the following candidate's resume and create a detailed 'future you' career story in {domain}.
 IMPORTANT: Base your entire analysis on the resume content below. Use the candidate's actual name, skills, experience, and education from their resume. Do NOT reference any other person.
 
 Candidate Resume:
 {profile}
-{rag_context}
+{rag_context}{web_context}
 
 Your response MUST include:
 1. Address the candidate by their name (extracted from the resume)
@@ -238,7 +361,8 @@ Your response MUST include:
 6. 3-5 specific skill-building steps they should focus on next (courses, projects, internships, etc.)
 
 Use short paragraphs and bullet points. Keep the tone realistic but encouraging.
-When citing examples, mention the source (e.g., "At companies like X..." or "Similar to roles at Y...")."""
+When citing examples, mention the source (e.g., "At companies like X..." or "Similar to roles at Y...").
+When referencing web search results, cite the source URL."""
 
     response = llm.invoke([
         SystemMessage(content=system_prompt),
@@ -279,16 +403,22 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
         except Exception as e:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
 
+    # Get live web search context if available
+    web_context = _fetch_web_context(profile, agent_type)
+    if web_context:
+        web_context = f"\n\n{web_context}\n"
+
     user_prompt = f"""You are mentoring a candidate in {domain}.
 IMPORTANT: Base your entire response on the candidate's resume below. Use their actual name, skills, and experience. Do NOT reference any other person.
 
 Candidate Resume:
 {profile}
-{rag_context}
+{rag_context}{web_context}
 
 The candidate is asking a follow-up question. Answer with clear, plain language,
 concrete examples from {domain}, and use short paragraphs or bullet points.
 If relevant examples are provided above, cite them in your answer.
+When referencing web search results, cite the source URL.
 
 Question:
 {question}"""
@@ -384,6 +514,7 @@ async def lifespan(_app: FastAPI):
     print(f"   Model: {LLM_MODEL}")
     print(f"   LangChain: lazy-loaded on first request")
     print(f"   RAG: lazy-loaded on first request (BM25)")
+    print(f"   Web Search: lazy-loaded on first request (Tavily)")
     print("=" * 50)
     yield
     print("Shutting down Yuto Portfolio AI Backend...")
@@ -663,15 +794,27 @@ if (FRONTEND_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
 
+MEDIA_TYPES = {
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".html": "text/html",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+}
+
+
 @app.get("/{filename:path}")
 def serve_static(filename: str):
     """Catch-all: serve static files from the frontend directory"""
     file_path = FRONTEND_DIR / filename
-    if file_path.is_file() and file_path.suffix in {".css", ".js", ".html", ".png", ".jpg", ".ico", ".svg", ".pdf"}:
-        return FileResponse(file_path)
+    if file_path.is_file() and file_path.suffix in MEDIA_TYPES:
+        return FileResponse(file_path, media_type=MEDIA_TYPES[file_path.suffix])
     index_path = FRONTEND_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(index_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Not found")
 
 
