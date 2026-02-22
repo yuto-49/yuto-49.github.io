@@ -198,8 +198,17 @@ if (aiSection) {
   const questionInput = document.getElementById('ai-question');
   const statusEl = document.getElementById('ai-status');
 
+  // Resume upload elements
+  const resumeForm = document.getElementById('ai-resume-form');
+  const resumeFileInput = document.getElementById('ai-resume-file');
+  const resumeFileLabel = document.getElementById('ai-file-label');
+  const resumeFileName = document.getElementById('ai-file-name');
+  const resumeUploadBtn = document.getElementById('ai-upload-btn');
+  const resumeStatusEl = document.getElementById('ai-resume-status');
+
   let currentAgent = null;
   let isRequestInFlight = false;
+  let uploadedResumeText = null;
 
   function setStatus(message, isError = false) {
     if (!statusEl) return;
@@ -207,7 +216,77 @@ if (aiSection) {
     statusEl.classList.toggle('error', Boolean(isError));
   }
 
+  function setResumeStatus(message, type = '') {
+    if (!resumeStatusEl) return;
+    resumeStatusEl.textContent = message || '';
+    resumeStatusEl.className = 'ai-resume-status';
+    if (type) resumeStatusEl.classList.add(type);
+  }
+
+  // Handle file selection
+  if (resumeFileInput) {
+    resumeFileInput.addEventListener('change', () => {
+      const file = resumeFileInput.files[0];
+      if (file) {
+        resumeFileName.textContent = file.name;
+        resumeFileLabel.classList.add('has-file');
+        resumeUploadBtn.disabled = false;
+      } else {
+        resumeFileName.textContent = 'Choose a PDF file';
+        resumeFileLabel.classList.remove('has-file');
+        resumeUploadBtn.disabled = true;
+      }
+    });
+  }
+
+  // Handle resume upload
+  if (resumeForm) {
+    resumeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = resumeFileInput.files[0];
+      if (!file) return;
+
+      resumeUploadBtn.disabled = true;
+      setResumeStatus('Uploading and processing resume...', 'loading');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('/api/agent/upload-resume', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || 'Upload failed');
+        }
+
+        const data = await response.json();
+        uploadedResumeText = data.resumeText;
+        setResumeStatus(`Resume "${data.filename}" uploaded successfully!`, 'success');
+
+        // Re-generate summary if an agent is already selected
+        if (currentAgent) {
+          generateCareerSummary(currentAgent);
+        }
+      } catch (err) {
+        console.error('Resume upload error:', err);
+        setResumeStatus(`Upload failed: ${err.message}`, 'error');
+      } finally {
+        resumeUploadBtn.disabled = false;
+      }
+    });
+  }
+
   function buildUserProfile() {
+    // Use uploaded resume text if available
+    if (uploadedResumeText) {
+      return `Candidate Resume:\n${uploadedResumeText}`;
+    }
+
+    // Fallback to page content
     const aboutText = document.querySelector('.about-text')?.textContent?.trim() || '';
     const skills = Array.from(document.querySelectorAll('.skill-tag')).map(el => el.textContent.trim());
     const projects = Array.from(document.querySelectorAll('.project-title')).map(el => el.textContent.trim());
@@ -236,6 +315,12 @@ if (aiSection) {
     if (!summaryEl) return;
 
     currentAgent = agent;
+
+    if (!uploadedResumeText) {
+      summaryEl.textContent = 'Please upload your resume first, then select an agent.';
+      return;
+    }
+
     const profile = buildUserProfile();
 
     summaryEl.textContent = 'Thinking about your future career in this field...';
@@ -332,6 +417,10 @@ if (aiSection) {
       if (!value) return;
       if (!currentAgent) {
         setStatus('Select Finance, Healthcare, or Consultant agent first.', true);
+        return;
+      }
+      if (!uploadedResumeText) {
+        setStatus('Please upload your resume first for personalized results.', true);
         return;
       }
       questionInput.value = '';

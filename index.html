@@ -354,11 +354,27 @@
       <div class="section-number">04</div>
       <h2 class="section-title">AI Career Agents</h2>
       <p class="ai-intro">
-        Explore how yuto future career could look in different industries. Finance, healthcare, and consulting agents
-        read your experience and imagine a "future yuto" in each path, powered by LangChain & Claude (via your backend).
+        Upload your resume and explore how your future career could look in different industries. Finance, healthcare, and consulting agents
+        analyze your experience and imagine a "future you" in each path, powered by LangChain & Claude.
       </p>
       <div class="ai-layout">
         <div class="ai-profile">
+          <div class="ai-resume-upload">
+            <h3 class="ai-subtitle">Upload Your Resume</h3>
+            <form id="ai-resume-form" class="ai-resume-form">
+              <label class="ai-file-label" id="ai-file-label">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span id="ai-file-name">Choose a PDF file</span>
+                <input type="file" id="ai-resume-file" accept=".pdf" hidden />
+              </label>
+              <button type="submit" class="ai-upload-btn" id="ai-upload-btn" disabled>Upload Resume</button>
+            </form>
+            <div id="ai-resume-status" class="ai-resume-status"></div>
+          </div>
           <h3 class="ai-subtitle">Choose an agent</h3>
           <div class="ai-agent-buttons">
             <button class="ai-agent-btn" data-agent="finance">Finance Agent</button>
@@ -366,12 +382,12 @@
             <button class="ai-agent-btn" data-agent="consultant">Consultant Agent</button>
           </div>
           <p class="ai-hint">
-            Each agent uses your resume, skills, and projects to create a tailored version of you in that industry.
+            Upload your resume first, then select an agent to generate a personalized career story based on your background.
           </p>
           <div class="ai-summary-card">
             <h4 class="ai-summary-title">Future You</h4>
             <div id="ai-summary" class="ai-summary-body">
-              Select an agent to generate your future career story.
+              Upload your resume and select an agent to generate your personalized career story.
             </div>
           </div>
         </div>

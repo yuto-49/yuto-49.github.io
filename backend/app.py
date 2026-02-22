@@ -438,6 +438,50 @@ def agent_endpoint(payload: AgentRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(exc)}")
 
 
+@app.post("/api/agent/upload-resume")
+async def agent_upload_resume(
+    file: UploadFile = File(...),
+):
+    """Upload a resume PDF and return extracted text for the AI career agent."""
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        uploads_dir = Path(__file__).parent / "data" / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        file_path = uploads_dir / file.filename
+        content = await file.read()
+
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+
+        # Extract text from the PDF
+        try:
+            from pdf_rag import extract_text_from_pdf
+        except ImportError:
+            from backend.pdf_rag import extract_text_from_pdf
+
+        resume_text = extract_text_from_pdf(file_path)
+
+        if not resume_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract text from the PDF")
+
+        return {
+            "success": True,
+            "filename": file.filename,
+            "resumeText": resume_text,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[backend] Error processing resume: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing resume: {str(e)}")
+
+
 # ============================================
 # PDF Upload & Management Endpoints
 # ============================================
