@@ -281,23 +281,10 @@ if (aiSection) {
   }
 
   function buildUserProfile() {
-    // Use uploaded resume text if available
-    if (uploadedResumeText) {
-      return `Candidate Resume:\n${uploadedResumeText}`;
+    if (!uploadedResumeText) {
+      return null;
     }
-
-    // Fallback to page content
-    const aboutText = document.querySelector('.about-text')?.textContent?.trim() || '';
-    const skills = Array.from(document.querySelectorAll('.skill-tag')).map(el => el.textContent.trim());
-    const projects = Array.from(document.querySelectorAll('.project-title')).map(el => el.textContent.trim());
-
-    return [
-      'Candidate: Yuto Maruyama',
-      `About: ${aboutText}`,
-      skills.length ? `Skills: ${skills.join(', ')}` : '',
-      projects.length ? `Projects: ${projects.join(' | ')}` : '',
-      'Resume file: assets/Yuto_Maruyama_resume1.1.pdf'
-    ].filter(Boolean).join('\n');
+    return `Candidate Resume:\n${uploadedResumeText}`;
   }
 
   function appendMessage(role, text) {
@@ -359,6 +346,12 @@ if (aiSection) {
     if (!currentAgent || !messagesEl || !formEl || !questionInput) return;
     if (isRequestInFlight) return;
 
+    const profile = buildUserProfile();
+    if (!profile) {
+      setStatus('Please upload your resume first.', true);
+      return;
+    }
+
     appendMessage('user', question);
     setStatus('Asking your agent...', false);
     isRequestInFlight = true;
@@ -373,7 +366,7 @@ if (aiSection) {
         body: JSON.stringify({
           mode: 'chat',
           agentType: currentAgent,
-          profile: buildUserProfile(),
+          profile,
           question
         })
       });

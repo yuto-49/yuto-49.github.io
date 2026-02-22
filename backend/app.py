@@ -157,21 +157,25 @@ AGENT_SYSTEM_PROMPTS = {
     "finance": (
         "You are a senior finance career advisor with 15+ years of experience. "
         "You understand roles such as investment banking, equity research, FP&A, fintech, "
-        "and quantitative analysis. You are mentoring a computer science student who wants "
-        "to explore a career in finance. Be clear, practical, and encouraging. "
+        "and quantitative analysis. You are mentoring a candidate who wants "
+        "to explore a career in finance. Analyze their uploaded resume carefully and base all advice "
+        "on THEIR specific background, skills, and experience — not on any other person. "
+        "Be clear, practical, and encouraging. "
         "Use short paragraphs and bullet points. Cite real-world examples when available."
     ),
     "healthcare": (
         "You are an expert in healthcare technology, digital health, bioinformatics, and medical AI. "
-        "You help technical students see how their skills translate into roles at hospitals, "
+        "You help candidates see how their skills translate into roles at hospitals, "
         "health-tech startups, research labs, and public health organizations. "
-        "You are mentoring a computer science student who wants to explore healthcare tech. "
+        "Analyze their uploaded resume carefully and base all advice "
+        "on THEIR specific background, skills, and experience — not on any other person. "
         "Be specific about roles, tools, and career paths. Use short paragraphs and bullet points."
     ),
     "consultant": (
         "You are a senior management consultant with experience in MBB-style firms and tech consulting. "
-        "You specialize in helping students understand consulting work, case interviews, and long-term growth. "
-        "You are mentoring a computer science student who wants to explore strategy and technology consulting. "
+        "You specialize in helping candidates understand consulting work, case interviews, and long-term growth. "
+        "Analyze their uploaded resume carefully and base all advice "
+        "on THEIR specific background, skills, and experience — not on any other person. "
         "Be realistic about the work, specific about skills needed, and encouraging about their potential."
     ),
 }
@@ -218,18 +222,20 @@ def run_agent_summary(agent_type: str, profile: str) -> str:
         except Exception as e:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
 
-    user_prompt = f"""Analyze this candidate profile and create a detailed 'future you' career story in {domain}.
+    user_prompt = f"""Analyze the following candidate's resume and create a detailed 'future you' career story in {domain}.
+IMPORTANT: Base your entire analysis on the resume content below. Use the candidate's actual name, skills, experience, and education from their resume. Do NOT reference any other person.
 
-Candidate Profile:
+Candidate Resume:
 {profile}
 {rag_context}
 
 Your response MUST include:
-1. 2-3 possible job titles they might hold in 3-5 years (cite specific examples from job examples if available)
-2. The kind of companies or teams they might work with (reference actual companies from examples)
-3. What a typical week looks like (base on real responsibilities from job examples)
-4. The main skills and tools they would lean on from their current background
-5. 3-5 specific skill-building steps they should focus on next (courses, projects, internships, etc.)
+1. Address the candidate by their name (extracted from the resume)
+2. 2-3 possible job titles they might hold in 3-5 years (cite specific examples from job examples if available)
+3. The kind of companies or teams they might work with (reference actual companies from examples)
+4. What a typical week looks like (base on real responsibilities from job examples)
+5. The main skills and tools they would lean on from their current background as shown in the resume
+6. 3-5 specific skill-building steps they should focus on next (courses, projects, internships, etc.)
 
 Use short paragraphs and bullet points. Keep the tone realistic but encouraging.
 When citing examples, mention the source (e.g., "At companies like X..." or "Similar to roles at Y...")."""
@@ -274,8 +280,9 @@ def run_agent_chat(agent_type: str, profile: str, question: str) -> str:
             print(f"[backend] Warning: Could not fetch RAG context: {e}")
 
     user_prompt = f"""You are mentoring a candidate in {domain}.
+IMPORTANT: Base your entire response on the candidate's resume below. Use their actual name, skills, and experience. Do NOT reference any other person.
 
-Candidate Profile:
+Candidate Resume:
 {profile}
 {rag_context}
 
