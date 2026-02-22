@@ -504,10 +504,15 @@ body {
   background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
 }
 
+.education-theme {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+}
+
 .weather-icon,
 .biomass-icon,
 .finance-icon,
-.medical-icon {
+.medical-icon,
+.education-icon {
   font-size: 64px;
   margin-bottom: 16px;
 }
@@ -515,7 +520,8 @@ body {
 .weather-details,
 .biomass-details,
 .finance-details,
-.medical-details {
+.medical-details,
+.education-details {
   text-align: center;
   color: white;
 }
