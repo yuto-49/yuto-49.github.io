@@ -463,13 +463,15 @@ async def agent_upload_resume(
         with open(file_path, "wb") as buffer:
             buffer.write(content)
 
-        # Extract text from the PDF
-        try:
-            from pdf_rag import extract_text_from_pdf
-        except ImportError:
-            from backend.pdf_rag import extract_text_from_pdf
-
-        resume_text = extract_text_from_pdf(file_path)
+        # Extract text from the PDF using pypdf directly
+        from pypdf import PdfReader
+        reader = PdfReader(file_path)
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text and text.strip():
+                text_parts.append(text)
+        resume_text = "\n\n".join(text_parts)
 
         if not resume_text.strip():
             raise HTTPException(status_code=400, detail="Could not extract text from the PDF")
